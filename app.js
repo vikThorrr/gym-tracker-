@@ -56,6 +56,8 @@ const settingsOverlay = document.getElementById('settings-overlay');
 const unitButtons = document.querySelectorAll('.unit-btn');
 const restTimerSwitch = document.getElementById('rest-timer-switch');
 const restDurationChipsEl = document.getElementById('rest-duration-chips');
+const notificationPermissionBtn = document.getElementById('notification-permission-btn');
+const notificationPermissionHint = document.getElementById('notification-permission-hint');
 const REST_DURATION_OPTIONS = [30, 60, 90, 120, 180];
 
 const statsEmpty = document.getElementById('stats-empty');
@@ -180,10 +182,27 @@ let minimizedByExercise = {};
 function resetRestTrackingFor(exIndex) {
   delete lastSetCompletionTime[exIndex];
   delete notifiedRestByExercise[exIndex];
+  updateWakeLock();
 }
 
 function isSetComplete(set) {
   return set.weight !== '' && set.reps !== '';
+}
+
+// Rebuilds the in-memory rest-timer clocks from the persisted `completedAt`
+// timestamps on each set, so the timer resumes correctly even if iOS fully
+// reloaded the page while the tab was backgrounded.
+function reconstructRestTracking() {
+  current.exercises.forEach((exercise, exIndex) => {
+    let latest = null;
+    exercise.sets.forEach(set => {
+      if (set.completedAt) {
+        const t = new Date(set.completedAt).getTime();
+        if (!latest || t > latest) latest = t;
+      }
+    });
+    if (latest) lastSetCompletionTime[exIndex] = latest;
+  });
 }
 
 function handleSetCompletionCheck(exIndex, setIndex) {
@@ -200,6 +219,7 @@ function handleSetCompletionCheck(exIndex, setIndex) {
   notifiedRestByExercise[exIndex] = false;
   saveCurrent();
   renderRestTimer(exIndex);
+  updateWakeLock();
 }
 
 function formatRestTime(totalSeconds) {
@@ -229,7 +249,10 @@ function renderRestTimer(exIndex) {
 
   if (ready && !notifiedRestByExercise[exIndex]) {
     notifiedRestByExercise[exIndex] = true;
+    const exerciseName = current.exercises[exIndex] ? current.exercises[exIndex].name : 'your exercise';
     playRestBeep();
+    notifyRestComplete(exerciseName);
+    updateWakeLock();
   }
 }
 
@@ -256,6 +279,53 @@ function playRestBeep() {
     // audio not available, ignore
   }
 }
+
+function notifyRestComplete(exerciseName) {
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+  try {
+    new Notification('Rest complete', {
+      body: `Time for your next set — ${exerciseName}`,
+      icon: 'apple-touch-icon.png',
+      tag: 'gym-tracker-rest',
+    });
+  } catch (e) {
+    // Notification constructor can throw on some mobile browsers; ignore.
+  }
+}
+
+// ---------- Screen Wake Lock (keeps the phone awake during rest so the
+// timer/beep isn't missed to an auto-locked screen) ----------
+
+let wakeLock = null;
+
+function anyRestTimerActive() {
+  return settings.restTimerEnabled && Object.keys(lastSetCompletionTime).length > 0;
+}
+
+async function updateWakeLock() {
+  if (!('wakeLock' in navigator)) return;
+  const shouldHold = anyRestTimerActive();
+  if (shouldHold && !wakeLock) {
+    try {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => { wakeLock = null; });
+    } catch (e) {
+      // permission denied, low battery, etc. — ignore
+    }
+  } else if (!shouldHold && wakeLock) {
+    wakeLock.release().catch(() => {});
+    wakeLock = null;
+  }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) return;
+  // A same-session tab (not a fresh reload) already has correct in-memory
+  // state; this just repaints immediately and re-acquires the wake lock,
+  // which the browser auto-releases whenever the page is hidden.
+  tickRestTimers();
+  updateWakeLock();
+});
 
 function getReferenceWeight(exIndex, name) {
   const ex = current.exercises[exIndex];
@@ -595,6 +665,30 @@ function renderSettings() {
       renderSettings();
     });
   });
+
+  renderNotificationPermissionState();
+}
+
+function renderNotificationPermissionState() {
+  if (typeof Notification === 'undefined') {
+    notificationPermissionBtn.textContent = 'Unsupported';
+    notificationPermissionBtn.disabled = true;
+    notificationPermissionHint.textContent = 'Your browser does not support notifications.';
+    return;
+  }
+  if (Notification.permission === 'granted') {
+    notificationPermissionBtn.textContent = 'Enabled';
+    notificationPermissionBtn.disabled = true;
+    notificationPermissionHint.textContent = "You'll get an on-screen alert when rest ends, in addition to the sound.";
+  } else if (Notification.permission === 'denied') {
+    notificationPermissionBtn.textContent = 'Blocked';
+    notificationPermissionBtn.disabled = true;
+    notificationPermissionHint.textContent = 'Notifications are blocked in your browser settings for this site.';
+  } else {
+    notificationPermissionBtn.textContent = 'Enable';
+    notificationPermissionBtn.disabled = false;
+    notificationPermissionHint.textContent = 'Get an on-screen alert when rest ends, in addition to the sound.';
+  }
 }
 
 function convertAllWeights(newUnit) {
@@ -632,10 +726,16 @@ unitButtons.forEach(btn => {
   btn.addEventListener('click', () => convertAllWeights(btn.dataset.unit));
 });
 
+notificationPermissionBtn.addEventListener('click', () => {
+  if (typeof Notification === 'undefined') return;
+  Notification.requestPermission().then(() => renderNotificationPermissionState());
+});
+
 restTimerSwitch.addEventListener('change', () => {
   settings.restTimerEnabled = restTimerSwitch.checked;
   saveSettings();
   renderExercises();
+  updateWakeLock();
 });
 
 // ---------- Finish workout ----------
@@ -675,6 +775,7 @@ finishBtn.addEventListener('click', () => {
   renderMuscleSummary();
   renderHistory();
   renderStats();
+  updateWakeLock();
 });
 
 function renderSessionDate() {
@@ -904,9 +1005,11 @@ document.querySelectorAll('.subtab-btn').forEach(btn => {
   });
 });
 
+reconstructRestTracking();
 renderSessionDate();
 renderExercises();
 renderMuscleSummary();
 renderHistory();
 renderStats();
 renderSettings();
+updateWakeLock();

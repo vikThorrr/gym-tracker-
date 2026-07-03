@@ -703,6 +703,11 @@ header h1 {
   color: white;
 }
 
+.unit-btn:disabled {
+  cursor: default;
+  opacity: 0.85;
+}
+
 .switch {
   position: relative;
   display: inline-block;

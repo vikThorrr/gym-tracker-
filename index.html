@@ -15,7 +15,7 @@
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="manifest" href="manifest.json">
 
-<link rel="stylesheet" href="style.css?v=7">
+<link rel="stylesheet" href="style.css?v=8">
 </head>
 <body>
   <div class="app">
@@ -116,7 +116,13 @@
         <span class="settings-label">Rest duration</span>
         <div class="quick-pick-row" id="rest-duration-chips"></div>
       </div>
-      <p class="settings-hint">You'll be notified when it's time for the next set.</p>
+      <p class="settings-hint">Keep the app open and your phone will stay awake during rest so you don't miss the alert.</p>
+
+      <div class="settings-row">
+        <span class="settings-label">Notifications</span>
+        <button type="button" id="notification-permission-btn" class="unit-btn active">Enable</button>
+      </div>
+      <p class="settings-hint" id="notification-permission-hint">Get an on-screen alert when rest ends, in addition to the sound.</p>
     </div>
   </div>
 
@@ -163,6 +169,6 @@
     </div>
   </template>
 
-  <script src="app.js?v=7"></script>
+  <script src="app.js?v=8"></script>
 </body>
 </html>
