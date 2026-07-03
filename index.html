@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Gym Tracker</title>
+
+<!-- Add to Home Screen support (iOS + Android) -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Gym Tracker">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0f1115">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="manifest" href="manifest.json">
+
+<link rel="stylesheet" href="style.css?v=7">
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="header-top">
+        <h1>Gym Tracker</h1>
+        <button id="open-settings-btn" class="icon-btn" title="Settings">⚙</button>
+      </div>
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="workout">Today</button>
+        <button class="tab-btn" data-tab="history">History</button>
+        <button class="tab-btn" data-tab="stats">Stats</button>
+      </div>
+    </header>
+
+    <main>
+      <!-- TODAY / WORKOUT TAB -->
+      <section id="workout-tab" class="tab-panel active">
+        <div class="session-bar">
+          <span id="session-date"></span>
+        </div>
+
+        <div id="muscle-summary" class="muscle-summary"></div>
+
+        <div id="exercise-list" class="exercise-list"></div>
+
+        <button id="open-picker-btn" class="add-exercise-cta">+ Add Exercise</button>
+        <button id="finish-btn" class="primary-btn finish-btn-full">Finish Workout</button>
+      </section>
+
+      <!-- HISTORY TAB -->
+      <section id="history-tab" class="tab-panel">
+        <div id="history-list" class="history-list"></div>
+        <p id="history-empty" class="empty-msg" hidden>No workouts logged yet. Finish a session to see it here.</p>
+      </section>
+
+      <!-- STATS TAB -->
+      <section id="stats-tab" class="tab-panel">
+        <div class="subtabs">
+          <button class="subtab-btn active" data-subtab="overview">Overview</button>
+          <button class="subtab-btn" data-subtab="split">Muscle Split</button>
+          <button class="subtab-btn" data-subtab="records">Records</button>
+        </div>
+
+        <div id="stats-overview" class="subtab-panel active"></div>
+        <div id="stats-split" class="subtab-panel"></div>
+        <div id="stats-records" class="subtab-panel"></div>
+
+        <p id="stats-empty" class="empty-msg" hidden>No workouts logged yet. Finish a session to see your stats here.</p>
+      </section>
+    </main>
+  </div>
+
+  <!-- EXERCISE PICKER MODAL -->
+  <div id="picker-overlay" class="picker-overlay" hidden>
+    <div class="picker-sheet">
+      <div class="picker-header">
+        <h2>Add Exercise</h2>
+        <button id="close-picker-btn" class="icon-btn">✕</button>
+      </div>
+      <input type="text" id="picker-search" placeholder="Search exercises…" autocomplete="off">
+      <div id="picker-groups" class="picker-groups"></div>
+      <div id="muscle-diagram" class="muscle-diagram"></div>
+      <div id="picker-exercises" class="picker-exercises"></div>
+      <form id="custom-exercise-form" class="custom-exercise-form">
+        <input type="text" id="custom-exercise-input" placeholder="Not listed? Type a custom exercise…" autocomplete="off">
+        <button type="submit">Add</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- SETTINGS MODAL -->
+  <div id="settings-overlay" class="picker-overlay" hidden>
+    <div class="picker-sheet settings-sheet">
+      <div class="picker-header">
+        <h2>Settings</h2>
+        <button id="close-settings-btn" class="icon-btn">✕</button>
+      </div>
+      <div class="settings-row">
+        <span class="settings-label">Weight unit</span>
+        <div class="unit-toggle">
+          <button class="unit-btn" data-unit="lbs">lbs</button>
+          <button class="unit-btn" data-unit="kg">kg</button>
+        </div>
+      </div>
+      <p class="settings-hint">Switching units converts all logged weights automatically.</p>
+
+      <div class="settings-row">
+        <span class="settings-label">Rest timer</span>
+        <label class="switch">
+          <input type="checkbox" id="rest-timer-switch">
+          <span class="switch-track"><span class="switch-thumb"></span></span>
+        </label>
+      </div>
+      <p class="settings-hint">Rest time between sets is always recorded for your stats. Turn this on to also see a live countdown during your workout.</p>
+
+      <div class="settings-row settings-row-stack">
+        <span class="settings-label">Rest duration</span>
+        <div class="quick-pick-row" id="rest-duration-chips"></div>
+      </div>
+      <p class="settings-hint">You'll be notified when it's time for the next set.</p>
+    </div>
+  </div>
+
+  <template id="exercise-card-template">
+    <div class="exercise-card">
+      <div class="exercise-header">
+        <div class="exercise-title">
+          <span class="muscle-badge"></span>
+          <h3 class="exercise-name"></h3>
+        </div>
+        <div class="exercise-header-right">
+          <span class="complete-badge" hidden>✓ Done</span>
+          <span class="last-time"></span>
+          <button class="toggle-collapse-btn" title="Collapse/Expand">⌄</button>
+          <button class="remove-exercise-btn" title="Remove exercise">✕</button>
+        </div>
+      </div>
+      <div class="sets-table">
+        <div class="sets-head">
+          <span>Set</span><span class="weight-head-label">Weight</span><span>Reps</span><span></span>
+        </div>
+        <div class="sets-body"></div>
+      </div>
+      <div class="rest-timer" hidden>
+        <span class="rest-timer-value">0:00</span>
+        <span class="rest-timer-hint">rest</span>
+      </div>
+      <div class="quick-pick">
+        <div class="quick-pick-label">Weight</div>
+        <div class="quick-pick-row weight-chip-row"></div>
+        <div class="quick-pick-label">Reps</div>
+        <div class="quick-pick-row reps-chip-row"></div>
+      </div>
+      <button class="add-set-btn">+ Add Set</button>
+    </div>
+  </template>
+
+  <template id="set-row-template">
+    <div class="set-row">
+      <span class="set-index"></span>
+      <input type="number" class="weight-input" placeholder="0" min="0" inputmode="decimal">
+      <input type="number" class="reps-input" placeholder="0" min="0" inputmode="numeric">
+      <button class="remove-set-btn" title="Remove set">✕</button>
+    </div>
+  </template>
+
+  <script src="app.js?v=7"></script>
+</body>
+</html>
