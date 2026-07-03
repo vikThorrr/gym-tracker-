@@ -373,6 +373,7 @@ function renderExercises() {
     badge.style.setProperty('--badge-color', meta.color);
 
     card.querySelector('.exercise-name').textContent = exercise.name;
+    card.querySelector('.card-watch-form').href = youtubeFormSearchUrl(exercise.name);
     card.querySelector('.last-time').textContent = findLastPerformance(exercise.name);
     card.querySelector('.weight-head-label').textContent = `Weight (${settings.unit})`;
     card.querySelector('.complete-badge').hidden = !(exercise.sets.length > 0 && exercise.sets.every(isSetComplete));
@@ -594,6 +595,10 @@ function renderPickerGroups() {
   });
 }
 
+function youtubeFormSearchUrl(exerciseName) {
+  return `https://www.youtube.com/results?search_query=${encodeURIComponent(exerciseName + ' proper form')}`;
+}
+
 function renderPickerExercises() {
   const query = pickerSearch.value.trim().toLowerCase();
   const groupIds = activeGroupId === 'all' ? MUSCLE_GROUPS.map(g => g.id) : [activeGroupId];
@@ -604,8 +609,11 @@ function renderPickerExercises() {
     const names = EXERCISE_LIBRARY[groupId].filter(n => n.toLowerCase().includes(query));
     if (names.length === 0) return;
     html += `<div class="picker-section-label" style="color:${meta.color}">${meta.label}</div>`;
-    html += names.map(name =>
-      `<button class="picker-exercise-btn" data-name="${escapeHtml(name)}" data-group="${groupId}">${escapeHtml(name)}</button>`
+    html += names.map(name => `
+      <div class="picker-exercise-row">
+        <button class="picker-exercise-btn" data-name="${escapeHtml(name)}" data-group="${groupId}">${escapeHtml(name)}</button>
+        <a class="watch-form-btn" href="${youtubeFormSearchUrl(name)}" target="_blank" rel="noopener noreferrer" title="Watch form video">▶</a>
+      </div>`
     ).join('');
   });
 

@@ -137,6 +137,29 @@ header h1 {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.watch-form-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--accent);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.watch-form-btn:hover { border-color: var(--accent); }
+
+.card-watch-form {
+  width: 24px;
+  height: 24px;
+  font-size: 0.65rem;
 }
 
 .muscle-badge {
@@ -521,7 +544,14 @@ header h1 {
 
 .picker-section-label:first-child { margin-top: 0; }
 
+.picker-exercise-row {
+  display: flex;
+  gap: 6px;
+}
+
 .picker-exercise-btn {
+  flex: 1;
+  min-width: 0;
   text-align: left;
   padding: 12px;
   background: var(--panel-2);
@@ -533,6 +563,11 @@ header h1 {
 }
 
 .picker-exercise-btn:hover { border-color: var(--accent); }
+
+.picker-exercise-row .watch-form-btn {
+  width: 44px;
+  font-size: 0.85rem;
+}
 
 .picker-no-results {
   color: var(--text-dim);
