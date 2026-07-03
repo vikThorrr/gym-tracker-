@@ -358,6 +358,8 @@ header h1 {
 
 .add-exercise-cta:hover { border-color: var(--accent); background: var(--panel-2); }
 
+#export-csv-btn { margin-bottom: 16px; }
+
 .muscle-summary {
   display: flex;
   flex-wrap: wrap;

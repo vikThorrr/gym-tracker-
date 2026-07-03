@@ -36,6 +36,7 @@ const setRowTpl = document.getElementById('set-row-template');
 const exerciseList = document.getElementById('exercise-list');
 const historyList = document.getElementById('history-list');
 const historyEmpty = document.getElementById('history-empty');
+const exportCsvBtn = document.getElementById('export-csv-btn');
 const sessionDateEl = document.getElementById('session-date');
 const finishBtn = document.getElementById('finish-btn');
 const muscleSummaryEl = document.getElementById('muscle-summary');
@@ -783,6 +784,62 @@ function renderSessionDate() {
 }
 
 // ---------- History tab ----------
+
+function csvEscape(value) {
+  const str = String(value);
+  if (/[",\n]/.test(str)) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+function exportHistoryCsv() {
+  const rows = [
+    ['Date', 'Exercise', 'Muscle Group', 'Set', 'Weight', 'Unit', 'Reps', 'Rest (seconds)', 'Completed At'],
+  ];
+
+  history
+    .slice()
+    .sort((a, b) => new Date(a.date) - new Date(b.date))
+    .forEach(session => {
+      session.exercises.forEach(ex => {
+        const meta = groupMeta(ex.muscleGroup);
+        ex.sets.forEach((set, i) => {
+          rows.push([
+            formatDate(session.date),
+            ex.name,
+            meta.label,
+            i + 1,
+            set.weight,
+            settings.unit,
+            set.reps,
+            set.restSeconds ?? '',
+            set.completedAt ?? '',
+          ]);
+        });
+      });
+    });
+
+  const csv = rows.map(row => row.map(csvEscape).join(',')).join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const dateStamp = new Date().toISOString().slice(0, 10);
+  a.href = url;
+  a.download = `gym-tracker-history-${dateStamp}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+exportCsvBtn.addEventListener('click', () => {
+  if (history.length === 0) {
+    alert('No workout history yet — finish a workout first.');
+    return;
+  }
+  exportHistoryCsv();
+});
 
 function renderHistory() {
   historyList.innerHTML = '';
