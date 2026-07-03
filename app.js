@@ -627,10 +627,6 @@ function renderPickerExercises() {
       addExerciseToSession(btn.dataset.name, btn.dataset.group);
       closePicker();
     });
-    btn.addEventListener('mouseenter', () => {
-      activeGroupId = btn.dataset.group;
-      renderMuscleDiagram();
-    });
   });
 }
 
