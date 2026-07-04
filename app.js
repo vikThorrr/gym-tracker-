@@ -9,7 +9,7 @@ const STORAGE_KEYS = {
 
 // Backend that schedules rest-timer push notifications (Cloudflare Worker).
 // Empty string disables all push scheduling (app works exactly as before).
-const PUSH_BACKEND_URL = '';
+const PUSH_BACKEND_URL = 'https://gym-tracker-push.vikthorrr.workers.dev';
 const VAPID_PUBLIC_KEY = 'BKc2-Mwi1MtewHKkTrPJsQ6pDK9esuXCsNkqX3YCxHCRZl445qNaf6VfAhpY0beVQTKVxg5gZ6Z49zcR7d00pOo';
 
 const MUSCLE_GROUPS = [
