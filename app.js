@@ -3,7 +3,14 @@ const STORAGE_KEYS = {
   history: 'gymTracker.history',
   customExercises: 'gymTracker.customExercises',
   settings: 'gymTracker.settings',
+  pushSubscription: 'gymTracker.pushSubscription',
+  deviceId: 'gymTracker.deviceId',
 };
+
+// Backend that schedules rest-timer push notifications (Cloudflare Worker).
+// Empty string disables all push scheduling (app works exactly as before).
+const PUSH_BACKEND_URL = '';
+const VAPID_PUBLIC_KEY = 'BKc2-Mwi1MtewHKkTrPJsQ6pDK9esuXCsNkqX3YCxHCRZl445qNaf6VfAhpY0beVQTKVxg5gZ6Z49zcR7d00pOo';
 
 const MUSCLE_GROUPS = [
   { id: 'chest', label: 'Chest', color: '#ff6b6b' },
@@ -193,6 +200,7 @@ let minimizedByExercise = {};
 function resetRestTrackingFor(exIndex) {
   delete lastSetCompletionTime[exIndex];
   delete notifiedRestByExercise[exIndex];
+  cancelPush(exIndex);
   updateWakeLock();
 }
 
@@ -231,6 +239,7 @@ function handleSetCompletionCheck(exIndex, setIndex) {
   saveCurrent();
   renderRestTimer(exIndex);
   updateWakeLock();
+  schedulePush(exIndex, current.exercises[exIndex].name);
 }
 
 function formatRestTime(totalSeconds) {
@@ -302,6 +311,91 @@ function notifyRestComplete(exerciseName) {
   } catch (e) {
     // Notification constructor can throw on some mobile browsers; ignore.
   }
+}
+
+// ---------- Web Push scheduling (real notifications while the app is
+// backgrounded — requires the push backend and, on iOS, Home Screen install) ----------
+
+function getDeviceId() {
+  let id = localStorage.getItem(STORAGE_KEYS.deviceId);
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem(STORAGE_KEYS.deviceId, id);
+  }
+  return id;
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+}
+
+async function ensurePushSubscription() {
+  if (!PUSH_BACKEND_URL) return null;
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return null;
+  if (!('serviceWorker' in navigator)) return null;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+      });
+    }
+    localStorage.setItem(STORAGE_KEYS.pushSubscription, JSON.stringify(sub.toJSON()));
+    return sub.toJSON();
+  } catch (e) {
+    return null;
+  }
+}
+
+function getStoredPushSubscription() {
+  const raw = localStorage.getItem(STORAGE_KEYS.pushSubscription);
+  return raw ? JSON.parse(raw) : null;
+}
+
+function pushJobId(exIndex) {
+  return `${getDeviceId()}-ex${exIndex}`;
+}
+
+function schedulePush(exIndex, exerciseName) {
+  if (!PUSH_BACKEND_URL || !settings.restTimerEnabled) return;
+  const subscription = getStoredPushSubscription();
+  if (!subscription) return;
+  fetch(`${PUSH_BACKEND_URL}/schedule`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    keepalive: true,
+    body: JSON.stringify({
+      id: pushJobId(exIndex),
+      subscription,
+      delayMs: settings.restDuration * 1000,
+      title: 'Rest complete',
+      body: `Time for your next set — ${exerciseName}`,
+    }),
+  }).catch(() => {});
+}
+
+function cancelPush(exIndex) {
+  if (!PUSH_BACKEND_URL) return;
+  if (!getStoredPushSubscription()) return;
+  fetch(`${PUSH_BACKEND_URL}/cancel`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    keepalive: true,
+    body: JSON.stringify({ id: pushJobId(exIndex) }),
+  }).catch(() => {});
+}
+
+function cancelAllPush() {
+  current.exercises.forEach((_, i) => cancelPush(i));
+}
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 
 // ---------- Screen Wake Lock (keeps the phone awake during rest so the
@@ -469,6 +563,7 @@ function renderExercises() {
     });
 
     card.querySelector('.remove-exercise-btn').addEventListener('click', () => {
+      cancelAllPush();
       current.exercises.splice(exIndex, 1);
       activeSetIndexByExercise = {};
       lastSetCompletionTime = {};
@@ -761,7 +856,10 @@ unitButtons.forEach(btn => {
 
 notificationPermissionBtn.addEventListener('click', () => {
   if (typeof Notification === 'undefined') return;
-  Notification.requestPermission().then(() => renderNotificationPermissionState());
+  Notification.requestPermission().then((permission) => {
+    renderNotificationPermissionState();
+    if (permission === 'granted') ensurePushSubscription();
+  });
 });
 
 restTimerSwitch.addEventListener('change', () => {
@@ -769,6 +867,7 @@ restTimerSwitch.addEventListener('change', () => {
   saveSettings();
   renderExercises();
   updateWakeLock();
+  if (!settings.restTimerEnabled) cancelAllPush();
 });
 
 // ---------- Finish workout ----------
@@ -797,6 +896,7 @@ finishBtn.addEventListener('click', () => {
   history.unshift({ id: Date.now(), date: current.date, exercises: cleaned });
   saveHistory();
 
+  cancelAllPush();
   current = { date: new Date().toISOString(), exercises: [] };
   activeSetIndexByExercise = {};
   lastSetCompletionTime = {};
@@ -1102,3 +1202,4 @@ renderHistory();
 renderStats();
 renderSettings();
 updateWakeLock();
+ensurePushSubscription();
