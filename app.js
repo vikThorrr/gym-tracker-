@@ -685,7 +685,21 @@ function renderSettings() {
   renderNotificationPermissionState();
 }
 
+function isStandaloneApp() {
+  return window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+}
+
 function renderNotificationPermissionState() {
+  // On iOS, Safari AND Chrome (both run on WebKit there, by Apple's rules)
+  // only expose the Notification API once the site is installed via
+  // Share -> Add to Home Screen. A regular browser tab can't use it at all.
+  const iOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  if (iOS && !isStandaloneApp()) {
+    notificationPermissionBtn.textContent = 'Add to Home Screen First';
+    notificationPermissionBtn.disabled = true;
+    notificationPermissionHint.textContent = 'On iPhone, notifications only work once this app is added to your Home Screen: tap Share, then "Add to Home Screen", then reopen it from there.';
+    return;
+  }
   if (typeof Notification === 'undefined') {
     notificationPermissionBtn.textContent = 'Unsupported';
     notificationPermissionBtn.disabled = true;
