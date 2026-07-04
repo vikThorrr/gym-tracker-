@@ -109,6 +109,16 @@ function formatDate(iso) {
   return new Date(iso).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
+// Rounds a stored weight value to 1 decimal for display, without touching
+// the underlying stored precision (which may carry extra decimals from
+// unit conversion so repeated kg/lbs toggling doesn't drift).
+function formatWeight(value) {
+  if (value === '' || value === undefined || value === null) return value ?? '';
+  const num = parseFloat(value);
+  if (!Number.isFinite(num)) return value;
+  return String(Math.round(num * 10) / 10);
+}
+
 function findMuscleGroupForName(name) {
   const lower = name.toLowerCase();
   for (const [groupId, names] of Object.entries(EXERCISE_LIBRARY)) {
@@ -124,7 +134,7 @@ function findLastPerformance(name) {
     const ex = session.exercises.find(e => e.name.toLowerCase() === name.toLowerCase());
     if (ex && ex.sets.length) {
       const best = ex.sets[ex.sets.length - 1];
-      return `Last: ${formatDate(session.date)} — ${best.weight}×${best.reps}`;
+      return `Last: ${formatDate(session.date)} — ${formatWeight(best.weight)}×${best.reps}`;
     }
   }
   return '';
@@ -347,8 +357,9 @@ function getReferenceWeight(exIndex, name) {
 function weightChipValues(exIndex, name) {
   const ref = getReferenceWeight(exIndex, name);
   const step = CHIP_WEIGHT_STEP[settings.unit] || 5;
+  const round1 = (v) => Math.round(v * 10) / 10;
   if (ref != null) {
-    return [ref - step * 2, ref - step, ref, ref + step, ref + step * 2].filter(v => v > 0);
+    return [ref - step * 2, ref - step, ref, ref + step, ref + step * 2].filter(v => v > 0).map(round1);
   }
   return DEFAULT_WEIGHT_LADDER[settings.unit] || DEFAULT_WEIGHT_LADDER.lbs;
 }
@@ -401,7 +412,7 @@ function renderExercises() {
       const activeSet = exercise.sets[activeIdx];
 
       weightChipRow.innerHTML = weightChipValues(exIndex, exercise.name)
-        .map(v => `<button type="button" class="quick-chip ${String(v) === String(activeSet.weight) ? 'active' : ''}" data-value="${v}">${v}</button>`)
+        .map(v => `<button type="button" class="quick-chip ${String(v) === formatWeight(activeSet.weight) ? 'active' : ''}" data-value="${v}">${v}</button>`)
         .join('');
       repsChipRow.innerHTML = REPS_CHIPS
         .map(v => `<button type="button" class="quick-chip ${String(v) === String(activeSet.reps) ? 'active' : ''}" data-value="${v}">${v}</button>`)
@@ -488,7 +499,7 @@ function buildSetRow(exIndex, setIndex, set) {
 
   const weightInput = row.querySelector('.weight-input');
   const repsInput = row.querySelector('.reps-input');
-  weightInput.value = set.weight ?? '';
+  weightInput.value = formatWeight(set.weight);
   repsInput.value = set.reps ?? '';
 
   weightInput.addEventListener('input', () => {
@@ -702,7 +713,10 @@ function convertAllWeights(newUnit) {
   const convert = (v) => {
     const num = parseFloat(v);
     if (!Number.isFinite(num)) return v;
-    return String(Math.round(num * factor * 10) / 10);
+    // Keep 3 decimals of precision in storage (not just 1) so repeated
+    // kg <-> lbs toggling doesn't compound rounding error over time.
+    // Display everywhere else rounds to 1 decimal via formatWeight().
+    return String(Math.round(num * factor * 1000) / 1000);
   };
 
   current.exercises.forEach(ex => ex.sets.forEach(s => { s.weight = convert(s.weight); }));
@@ -814,7 +828,7 @@ function exportHistoryCsv() {
             ex.name,
             meta.label,
             i + 1,
-            set.weight,
+            formatWeight(set.weight),
             settings.unit,
             set.reps,
             set.restSeconds ?? '',
@@ -883,7 +897,7 @@ function renderHistory() {
       const meta = groupMeta(ex.muscleGroup);
       const exEl = document.createElement('div');
       exEl.className = 'history-exercise';
-      const setsSummary = ex.sets.map(s => `${s.weight}×${s.reps}`).join(', ');
+      const setsSummary = ex.sets.map(s => `${formatWeight(s.weight)}×${s.reps}`).join(', ');
       exEl.innerHTML = `
         <div class="history-exercise-name">
           <span class="muscle-badge" style="--badge-color:${meta.color}">${meta.label}</span>
@@ -1031,7 +1045,7 @@ function renderStatsRecords() {
             <span class="muscle-badge" style="--badge-color:${meta.color}">${meta.label}</span>
             ${escapeHtml(name)}
           </div>
-          <div class="history-sets">${r.weight}×${r.reps} <span class="unit-suffix">${settings.unit}</span> — ${formatDate(r.date)}</div>
+          <div class="history-sets">${formatWeight(r.weight)}×${r.reps} <span class="unit-suffix">${settings.unit}</span> — ${formatDate(r.date)}</div>
         </div>`;
     })
     .join('');
