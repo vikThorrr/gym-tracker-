@@ -5,7 +5,63 @@ const STORAGE_KEYS = {
   settings: 'gymTracker.settings',
   pushSubscription: 'gymTracker.pushSubscription',
   deviceId: 'gymTracker.deviceId',
+  barPrefs: 'gymTracker.barPrefs',
 };
+
+// ---------- App version + changelog (semver: MAJOR.MINOR.PATCH) ----------
+// Newest first. Bump MINOR for features, PATCH for fixes. Displayed in Settings.
+const APP_VERSION = '1.9.0';
+const CHANGELOG = [
+  { version: '1.9.0', date: '2026-07-04', changes: [
+    'Tap the rest timer to stop it; Add Set restarts your rest countdown',
+    'Set barbell & curl-bar weights in Settings — auto-included when logging',
+    'Light / dark theme toggle in Settings',
+    'Live workout duration timer on the Today screen, saved to history',
+    'Backup & restore all your data to a file (protects against data loss)',
+    'This changelog + app version now shown in Settings',
+  ] },
+  { version: '1.8.3', date: '2026-07-04', changes: [
+    'Fixed title & settings icon overlapping the iPhone status bar',
+  ] },
+  { version: '1.8.2', date: '2026-07-04', changes: [
+    'Fixed kg/lbs weights drifting slightly after repeated unit switches',
+  ] },
+  { version: '1.8.1', date: '2026-07-04', changes: [
+    'Fixed exercise picker needing a double-tap on iPhone',
+  ] },
+  { version: '1.8.0', date: '2026-07-04', changes: [
+    'Background push notifications when rest ends (Home Screen app)',
+  ] },
+  { version: '1.7.0', date: '2026-07-03', changes: [
+    'Rest timer: on-screen countdown, sound, and screen-wake during rest',
+    'Notifications setting for rest alerts',
+  ] },
+  { version: '1.6.0', date: '2026-07-03', changes: [
+    'Export workout history to CSV for analysis',
+    'Watch-form video links on every exercise',
+  ] },
+  { version: '1.5.0', date: '2026-07-03', changes: [
+    'Auto-minimize previous exercises when you add a new one',
+    'Per-set date/time recorded in the background',
+  ] },
+  { version: '1.4.0', date: '2026-07-03', changes: [
+    'Stats tab: overview, muscle split, and personal records',
+    'Delete a whole day or a single exercise from history',
+  ] },
+  { version: '1.3.0', date: '2026-07-03', changes: [
+    'Tap-to-pick weight & reps chips to reduce typing',
+    'kg / lbs unit setting with automatic conversion',
+  ] },
+  { version: '1.2.0', date: '2026-07-03', changes: [
+    'Muscle-group exercise picker with body diagram and color badges',
+  ] },
+  { version: '1.1.0', date: '2026-07-01', changes: [
+    'Muscle-group categories and "last time" reference per exercise',
+  ] },
+  { version: '1.0.0', date: '2026-07-01', changes: [
+    'Log workouts: exercises, sets, reps, weight, and history',
+  ] },
+];
 
 // Backend that schedules rest-timer push notifications (Cloudflare Worker).
 // Empty string disables all push scheduling (app works exactly as before).
@@ -61,12 +117,24 @@ const muscleDiagramEl = document.getElementById('muscle-diagram');
 const openSettingsBtn = document.getElementById('open-settings-btn');
 const closeSettingsBtn = document.getElementById('close-settings-btn');
 const settingsOverlay = document.getElementById('settings-overlay');
-const unitButtons = document.querySelectorAll('.unit-btn');
+// Only the real lbs/kg buttons — other controls reuse .unit-btn for styling.
+const unitButtons = document.querySelectorAll('.unit-btn[data-unit]');
 const restTimerSwitch = document.getElementById('rest-timer-switch');
 const restDurationChipsEl = document.getElementById('rest-duration-chips');
 const notificationPermissionBtn = document.getElementById('notification-permission-btn');
 const notificationPermissionHint = document.getElementById('notification-permission-hint');
 const REST_DURATION_OPTIONS = [30, 60, 90, 120, 180];
+
+const themeButtons = document.querySelectorAll('.theme-btn');
+const barbellWeightInput = document.getElementById('barbell-weight-input');
+const curlBarWeightInput = document.getElementById('curl-bar-weight-input');
+const unitLabels = document.querySelectorAll('.unit-label');
+const exportBackupBtn = document.getElementById('export-backup-btn');
+const importBackupBtn = document.getElementById('import-backup-btn');
+const importBackupInput = document.getElementById('import-backup-input');
+const appVersionEl = document.getElementById('app-version');
+const toggleChangelogBtn = document.getElementById('toggle-changelog-btn');
+const changelogListEl = document.getElementById('changelog-list');
 
 const statsEmpty = document.getElementById('stats-empty');
 const statsOverviewEl = document.getElementById('stats-overview');
@@ -77,7 +145,31 @@ let current = loadCurrent();
 let history = loadHistory();
 let customExercises = loadCustomExercises();
 let settings = loadSettings();
+let barPrefs = loadBarPrefs();
 let activeGroupId = 'all';
+
+// ---------- Theme ----------
+function applyTheme() {
+  document.documentElement.setAttribute('data-theme', settings.theme === 'light' ? 'light' : 'dark');
+  const themeColor = settings.theme === 'light' ? '#f4f5f7' : '#0f1115';
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', themeColor);
+}
+applyTheme();
+
+// ---------- Bar weight helpers ----------
+const BAR_TYPES = {
+  none: { label: 'No bar', weight: () => 0 },
+  barbell: { label: 'Barbell', weight: () => Number(settings.barbellWeight) || 0 },
+  curl: { label: 'Curl bar', weight: () => Number(settings.curlBarWeight) || 0 },
+};
+
+function exerciseBar(exercise) {
+  return exercise.bar && BAR_TYPES[exercise.bar] ? exercise.bar : 'none';
+}
+function barWeightFor(exercise) {
+  return BAR_TYPES[exerciseBar(exercise)].weight();
+}
 
 function loadCurrent() {
   const raw = localStorage.getItem(STORAGE_KEYS.current);
@@ -97,9 +189,22 @@ function loadCustomExercises() {
 
 function loadSettings() {
   const raw = localStorage.getItem(STORAGE_KEYS.settings);
-  const defaults = { unit: 'lbs', restTimerEnabled: false, restDuration: 90 };
+  const defaults = {
+    unit: 'lbs',
+    restTimerEnabled: false,
+    restDuration: 90,
+    theme: 'dark',
+    barbellWeight: 45,   // Olympic barbell (lbs default)
+    curlBarWeight: 25,   // EZ / curl bar (lbs default)
+  };
   return raw ? { ...defaults, ...JSON.parse(raw) } : defaults;
 }
+
+function loadBarPrefs() {
+  const raw = localStorage.getItem(STORAGE_KEYS.barPrefs);
+  return raw ? JSON.parse(raw) : {};
+}
+function saveBarPrefs() { localStorage.setItem(STORAGE_KEYS.barPrefs, JSON.stringify(barPrefs)); }
 
 function saveCurrent() { localStorage.setItem(STORAGE_KEYS.current, JSON.stringify(current)); }
 function saveHistory() { localStorage.setItem(STORAGE_KEYS.history, JSON.stringify(history)); }
@@ -152,10 +257,17 @@ function addExerciseToSession(name, muscleGroup) {
     minimizedByExercise[i] = true;
     resetRestTrackingFor(i);
   });
-  current.exercises.push({ name, muscleGroup, sets: [{ weight: '', reps: '' }] });
+  // Mark the workout start the first time an exercise is added.
+  if (!current.startedAt) {
+    current.startedAt = new Date().toISOString();
+  }
+  const bar = barPrefs[name.toLowerCase()] || 'none';
+  const startWeight = bar !== 'none' ? formatWeight(BAR_TYPES[bar].weight()) : '';
+  current.exercises.push({ name, muscleGroup, bar, sets: [{ weight: startWeight, reps: '' }] });
   saveCurrent();
   renderExercises();
   renderMuscleSummary();
+  renderWorkoutDuration();
 }
 
 // ---------- Muscle summary chips ----------
@@ -204,6 +316,22 @@ function resetRestTrackingFor(exIndex) {
   updateWakeLock();
 }
 
+// Tap the timer to stop it (clears clock, hides timer, cancels the push).
+function stopRestTimer(exIndex) {
+  resetRestTrackingFor(exIndex);
+  renderRestTimer(exIndex);
+}
+
+// Restart the rest countdown from zero (used by "Add Set").
+function restartRestTimer(exIndex) {
+  if (!settings.restTimerEnabled) return;
+  lastSetCompletionTime[exIndex] = Date.now();
+  notifiedRestByExercise[exIndex] = false;
+  renderRestTimer(exIndex);
+  updateWakeLock();
+  schedulePush(exIndex, current.exercises[exIndex].name);
+}
+
 function isSetComplete(set) {
   return set.weight !== '' && set.reps !== '';
 }
@@ -248,6 +376,27 @@ function formatRestTime(totalSeconds) {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
+function formatDuration(totalSeconds) {
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+// Live "how long have I been working out" clock on the Today screen.
+function renderWorkoutDuration() {
+  const el = document.getElementById('workout-duration');
+  if (!el) return;
+  if (current.exercises.length === 0 || !current.startedAt) {
+    el.hidden = true;
+    return;
+  }
+  const secs = Math.max(0, Math.round((Date.now() - new Date(current.startedAt).getTime()) / 1000));
+  el.hidden = false;
+  el.textContent = `⏱ ${formatDuration(secs)}`;
+}
+
 function renderRestTimer(exIndex) {
   const card = exerciseList.children[exIndex];
   if (!card) return;
@@ -265,7 +414,7 @@ function renderRestTimer(exIndex) {
   timerEl.hidden = false;
   timerEl.classList.toggle('ready', ready);
   timerEl.querySelector('.rest-timer-value').textContent = formatRestTime(elapsed);
-  timerEl.querySelector('.rest-timer-hint').textContent = ready ? 'Time for your next set!' : 'rest';
+  timerEl.querySelector('.rest-timer-hint').textContent = ready ? 'Time for your next set! · tap to stop' : 'rest · tap to stop';
 
   if (ready && !notifiedRestByExercise[exIndex]) {
     notifiedRestByExercise[exIndex] = true;
@@ -281,7 +430,10 @@ function tickRestTimers() {
   Object.keys(lastSetCompletionTime).forEach(exIndex => renderRestTimer(Number(exIndex)));
 }
 
-setInterval(tickRestTimers, 1000);
+setInterval(() => {
+  tickRestTimers();
+  renderWorkoutDuration();
+}, 1000);
 
 function playRestBeep() {
   try {
@@ -493,6 +645,35 @@ function renderExercises() {
       activeSetIndexByExercise[exIndex] = exercise.sets.length - 1;
     }
 
+    // Bar selector: choose which bar this exercise uses; its weight is
+    // auto-included so you log the true total instead of adding it by hand.
+    const barSelector = card.querySelector('.bar-selector');
+    if (barSelector) {
+      const currentBar = exerciseBar(exercise);
+      barSelector.innerHTML = Object.entries(BAR_TYPES).map(([key, t]) => {
+        const w = t.weight();
+        const label = key === 'none' ? t.label : `${t.label} ${w ? '(' + formatWeight(w) + ' ' + settings.unit + ')' : ''}`.trim();
+        return `<button type="button" class="bar-chip ${key === currentBar ? 'active' : ''}" data-bar="${key}">${label}</button>`;
+      }).join('');
+      barSelector.querySelectorAll('.bar-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+          const bar = chip.dataset.bar;
+          exercise.bar = bar;
+          barPrefs[exercise.name.toLowerCase()] = bar;
+          saveBarPrefs();
+          const barW = BAR_TYPES[bar].weight();
+          const activeIdx = Math.min(activeSetIndexByExercise[exIndex] ?? 0, exercise.sets.length - 1);
+          const activeSet = exercise.sets[activeIdx];
+          if (bar !== 'none' && barW > 0 && (activeSet.weight === '' || activeSet.weight === undefined)) {
+            activeSet.weight = formatWeight(barW);
+          }
+          saveCurrent();
+          renderExercises();
+          renderMuscleSummary();
+        });
+      });
+    }
+
     const setsBody = card.querySelector('.sets-body');
     exercise.sets.forEach((set, setIndex) => {
       setsBody.appendChild(buildSetRow(exIndex, setIndex, set));
@@ -554,17 +735,25 @@ function renderExercises() {
 
     card.querySelector('.add-set-btn').addEventListener('click', () => {
       const last = exercise.sets[exercise.sets.length - 1];
-      exercise.sets.push({ weight: last ? last.weight : '', reps: last ? last.reps : '' });
+      const barW = barWeightFor(exercise);
+      let carryWeight = last ? last.weight : '';
+      if ((carryWeight === '' || carryWeight === undefined) && barW > 0) {
+        carryWeight = formatWeight(barW);
+      }
+      exercise.sets.push({ weight: carryWeight, reps: last ? last.reps : '' });
       const newIndex = exercise.sets.length - 1;
       activeSetIndexByExercise[exIndex] = newIndex;
       saveCurrent();
       renderExercises();
       handleSetCompletionCheck(exIndex, newIndex);
+      // Explicitly restart the rest countdown for the new set.
+      restartRestTimer(exIndex);
     });
 
     card.querySelector('.remove-exercise-btn').addEventListener('click', () => {
       cancelAllPush();
       current.exercises.splice(exIndex, 1);
+      if (current.exercises.length === 0) delete current.startedAt;
       activeSetIndexByExercise = {};
       lastSetCompletionTime = {};
       notifiedRestByExercise = {};
@@ -572,7 +761,11 @@ function renderExercises() {
       saveCurrent();
       renderExercises();
       renderMuscleSummary();
+      renderWorkoutDuration();
     });
+
+    const timerEl = cardEl.querySelector('.rest-timer');
+    if (timerEl) timerEl.addEventListener('click', () => stopRestTimer(exIndex));
 
     exerciseList.appendChild(cardEl);
     renderRestTimer(exIndex);
@@ -777,7 +970,26 @@ function renderSettings() {
     });
   });
 
+  themeButtons.forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.theme === (settings.theme || 'dark'));
+  });
+  unitLabels.forEach(el => { el.textContent = settings.unit; });
+  barbellWeightInput.value = formatWeight(settings.barbellWeight);
+  curlBarWeightInput.value = formatWeight(settings.curlBarWeight);
+  appVersionEl.textContent = `v${APP_VERSION}`;
+  renderChangelog();
+
   renderNotificationPermissionState();
+}
+
+function renderChangelog() {
+  changelogListEl.innerHTML = CHANGELOG.map(entry => `
+    <div class="changelog-entry">
+      <div class="changelog-version">v${entry.version} <span class="changelog-date">${entry.date}</span></div>
+      <ul class="changelog-changes">
+        ${entry.changes.map(c => `<li>${escapeHtml(c)}</li>`).join('')}
+      </ul>
+    </div>`).join('');
 }
 
 function isStandaloneApp() {
@@ -831,6 +1043,11 @@ function convertAllWeights(newUnit) {
   current.exercises.forEach(ex => ex.sets.forEach(s => { s.weight = convert(s.weight); }));
   history.forEach(session => session.exercises.forEach(ex => ex.sets.forEach(s => { s.weight = convert(s.weight); })));
 
+  // Convert the configured bar weights too, so they stay physically consistent.
+  const convertNum = (n) => Math.round((Number(n) || 0) * factor * 10) / 10;
+  settings.barbellWeight = convertNum(settings.barbellWeight);
+  settings.curlBarWeight = convertNum(settings.curlBarWeight);
+
   settings.unit = newUnit;
   saveSettings();
   saveCurrent();
@@ -870,6 +1087,101 @@ restTimerSwitch.addEventListener('change', () => {
   if (!settings.restTimerEnabled) cancelAllPush();
 });
 
+themeButtons.forEach(btn => {
+  btn.addEventListener('click', () => {
+    settings.theme = btn.dataset.theme;
+    saveSettings();
+    applyTheme();
+    renderSettings();
+  });
+});
+
+barbellWeightInput.addEventListener('input', () => {
+  settings.barbellWeight = parseFloat(barbellWeightInput.value) || 0;
+  saveSettings();
+  renderExercises();
+});
+curlBarWeightInput.addEventListener('input', () => {
+  settings.curlBarWeight = parseFloat(curlBarWeightInput.value) || 0;
+  saveSettings();
+  renderExercises();
+});
+
+exportBackupBtn.addEventListener('click', exportBackup);
+importBackupBtn.addEventListener('click', () => importBackupInput.click());
+importBackupInput.addEventListener('change', () => {
+  const file = importBackupInput.files[0];
+  if (file) importBackup(file);
+  importBackupInput.value = '';
+});
+
+toggleChangelogBtn.addEventListener('click', () => {
+  const willShow = changelogListEl.hidden;
+  changelogListEl.hidden = !willShow;
+  toggleChangelogBtn.textContent = willShow ? "What's new / changelog ▴" : "What's new / changelog ▾";
+});
+
+// ---------- Backup & restore (JSON) ----------
+
+function exportBackup() {
+  const payload = {
+    app: 'gym-tracker',
+    version: APP_VERSION,
+    exportedAt: new Date().toISOString(),
+    data: { current, history, customExercises, settings, barPrefs },
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `gym-tracker-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function importBackup(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    let d;
+    try {
+      const parsed = JSON.parse(reader.result);
+      d = parsed && parsed.data ? parsed.data : parsed;
+    } catch (e) {
+      alert('Could not read that file — is it a valid Gym Tracker backup?');
+      return;
+    }
+    if (!d || (!Array.isArray(d.history) && !d.current)) {
+      alert('This does not look like a Gym Tracker backup file.');
+      return;
+    }
+    if (!confirm('Restore this backup? It will REPLACE all data currently on this device.')) return;
+
+    if (d.history) { history = d.history; saveHistory(); }
+    if (d.current) { current = d.current; saveCurrent(); }
+    if (d.customExercises) { customExercises = d.customExercises; saveCustomExercises(); }
+    if (d.settings) { settings = { ...settings, ...d.settings }; saveSettings(); }
+    if (d.barPrefs) { barPrefs = d.barPrefs; saveBarPrefs(); }
+
+    applyTheme();
+    activeSetIndexByExercise = {};
+    lastSetCompletionTime = {};
+    notifiedRestByExercise = {};
+    minimizedByExercise = {};
+    reconstructRestTracking();
+    renderSessionDate();
+    renderExercises();
+    renderMuscleSummary();
+    renderWorkoutDuration();
+    renderHistory();
+    renderStats();
+    renderSettings();
+    alert('Backup restored successfully.');
+  };
+  reader.readAsText(file);
+}
+
 // ---------- Finish workout ----------
 
 finishBtn.addEventListener('click', () => {
@@ -893,7 +1205,16 @@ finishBtn.addEventListener('click', () => {
     return;
   }
 
-  history.unshift({ id: Date.now(), date: current.date, exercises: cleaned });
+  const durationSeconds = current.startedAt
+    ? Math.max(0, Math.round((Date.now() - new Date(current.startedAt).getTime()) / 1000))
+    : null;
+  history.unshift({
+    id: Date.now(),
+    date: current.date,
+    startedAt: current.startedAt || current.date,
+    durationSeconds,
+    exercises: cleaned,
+  });
   saveHistory();
 
   cancelAllPush();
@@ -906,6 +1227,7 @@ finishBtn.addEventListener('click', () => {
   renderExercises();
   renderSessionDate();
   renderMuscleSummary();
+  renderWorkoutDuration();
   renderHistory();
   renderStats();
   updateWakeLock();
@@ -987,7 +1309,10 @@ function renderHistory() {
 
     const header = document.createElement('div');
     header.className = 'history-card-header';
-    header.innerHTML = `<h3>${formatDate(session.date)}</h3>`;
+    const durationLabel = Number.isFinite(session.durationSeconds)
+      ? ` <span class="history-duration">⏱ ${formatDuration(session.durationSeconds)}</span>`
+      : '';
+    header.innerHTML = `<h3>${formatDate(session.date)}${durationLabel}</h3>`;
 
     const delBtn = document.createElement('button');
     delBtn.className = 'delete-history-btn';
@@ -1045,9 +1370,15 @@ function computeOverviewStats() {
   let totalVolume = 0;
   let restTotal = 0;
   let restCount = 0;
+  let durationTotal = 0;
+  let durationCount = 0;
   const exerciseNames = new Set();
 
   history.forEach(session => {
+    if (Number.isFinite(session.durationSeconds)) {
+      durationTotal += session.durationSeconds;
+      durationCount += 1;
+    }
     session.exercises.forEach(ex => {
       exerciseNames.add(ex.name);
       ex.sets.forEach(s => {
@@ -1067,6 +1398,7 @@ function computeOverviewStats() {
     totalVolume: Math.round(totalVolume),
     uniqueExercises: exerciseNames.size,
     avgRestSeconds: restCount > 0 ? Math.round(restTotal / restCount) : null,
+    avgWorkoutSeconds: durationCount > 0 ? Math.round(durationTotal / durationCount) : null,
   };
 }
 
@@ -1121,6 +1453,11 @@ function renderStatsOverview() {
       <div class="stat-card">
         <div class="stat-value">${formatRestTime(stats.avgRestSeconds)}</div>
         <div class="stat-label">Avg rest between sets</div>
+      </div>` : ''}
+      ${stats.avgWorkoutSeconds !== null ? `
+      <div class="stat-card">
+        <div class="stat-value">${formatDuration(stats.avgWorkoutSeconds)}</div>
+        <div class="stat-label">Avg workout length</div>
       </div>` : ''}
     </div>`;
 }
@@ -1198,6 +1535,7 @@ reconstructRestTracking();
 renderSessionDate();
 renderExercises();
 renderMuscleSummary();
+renderWorkoutDuration();
 renderHistory();
 renderStats();
 renderSettings();

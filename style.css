@@ -11,6 +11,18 @@
   --radius: 12px;
 }
 
+[data-theme="light"] {
+  --bg: #f4f5f7;
+  --panel: #ffffff;
+  --panel-2: #eef0f3;
+  --border: #d9dce1;
+  --text: #1a1d23;
+  --text-dim: #667085;
+  --accent: #ff5c3c;
+  --accent-dim: #ff5c3c22;
+  --green: #1fae6a;
+}
+
 * { box-sizing: border-box; }
 
 body {
@@ -903,4 +915,138 @@ header h1 {
   border-radius: 10px;
   padding: 12px;
   margin-bottom: 8px;
+}
+
+/* ---------- v1.9 additions ---------- */
+
+/* Workout duration on the Today screen */
+.session-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.workout-duration {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.workout-duration[hidden] { display: none; }
+
+/* Bar selector on exercise cards */
+.bar-selector {
+  margin-bottom: 10px;
+}
+.bar-chip {
+  padding: 6px 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-dim);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.bar-chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.exercise-card.minimized .bar-selector { display: none; }
+
+/* Rest timer is tappable to stop */
+.rest-timer { cursor: pointer; }
+
+/* History duration badge */
+.history-duration {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--accent);
+  margin-left: 6px;
+}
+
+/* Settings extras */
+.settings-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 16px 0;
+}
+.settings-number {
+  width: 90px;
+  padding: 8px 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 0.95rem;
+  text-align: right;
+}
+.settings-number:focus { outline: none; border-color: var(--accent); }
+.settings-readonly {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+.theme-btn {
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-weight: 600;
+  font-size: 0.85rem;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.theme-btn.active {
+  background: var(--accent);
+  color: #fff;
+}
+.backup-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.backup-buttons .unit-btn {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.changelog-toggle {
+  width: 100%;
+  margin-top: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  text-align: center;
+}
+.changelog-list {
+  margin-top: 10px;
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  background: var(--panel-2);
+}
+.changelog-list[hidden] { display: none; }
+.changelog-entry { margin-bottom: 14px; }
+.changelog-entry:last-child { margin-bottom: 0; }
+.changelog-version {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+.changelog-date {
+  font-weight: 400;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  margin-left: 6px;
+}
+.changelog-changes {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+.changelog-changes li {
+  font-size: 0.82rem;
+  color: var(--text-dim);
+  margin-bottom: 3px;
 }

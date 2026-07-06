@@ -15,7 +15,7 @@
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="manifest" href="manifest.json">
 
-<link rel="stylesheet" href="style.css?v=11">
+<link rel="stylesheet" href="style.css?v=12">
 </head>
 <body>
   <div class="app">
@@ -36,6 +36,7 @@
       <section id="workout-tab" class="tab-panel active">
         <div class="session-bar">
           <span id="session-date"></span>
+          <span id="workout-duration" class="workout-duration" hidden></span>
         </div>
 
         <div id="muscle-summary" class="muscle-summary"></div>
@@ -124,6 +125,47 @@
         <button type="button" id="notification-permission-btn" class="unit-btn active">Enable</button>
       </div>
       <p class="settings-hint" id="notification-permission-hint">Get an on-screen alert when rest ends, in addition to the sound.</p>
+
+      <div class="settings-divider"></div>
+
+      <div class="settings-row">
+        <span class="settings-label">Appearance</span>
+        <div class="unit-toggle">
+          <button class="theme-btn" data-theme="dark">Dark</button>
+          <button class="theme-btn" data-theme="light">Light</button>
+        </div>
+      </div>
+
+      <div class="settings-row">
+        <span class="settings-label">Barbell weight (<span class="unit-label">lbs</span>)</span>
+        <input type="number" id="barbell-weight-input" class="settings-number" min="0" step="0.5" inputmode="decimal">
+      </div>
+      <div class="settings-row">
+        <span class="settings-label">Curl bar weight (<span class="unit-label">lbs</span>)</span>
+        <input type="number" id="curl-bar-weight-input" class="settings-number" min="0" step="0.5" inputmode="decimal">
+      </div>
+      <p class="settings-hint">Pick a bar on an exercise and its weight is auto-included in each set, so you log the true total.</p>
+
+      <div class="settings-divider"></div>
+
+      <div class="settings-row settings-row-stack">
+        <span class="settings-label">Backup &amp; restore</span>
+        <div class="backup-buttons">
+          <button type="button" id="export-backup-btn" class="unit-btn">Export backup</button>
+          <button type="button" id="import-backup-btn" class="unit-btn">Restore backup</button>
+          <input type="file" id="import-backup-input" accept="application/json,.json" hidden>
+        </div>
+      </div>
+      <p class="settings-hint">Your data lives only on this device. Export a backup file regularly; restore it after reinstalling or on a new device.</p>
+
+      <div class="settings-divider"></div>
+
+      <div class="settings-row">
+        <span class="settings-label">Version</span>
+        <span id="app-version" class="settings-readonly"></span>
+      </div>
+      <button type="button" id="toggle-changelog-btn" class="unit-btn changelog-toggle">What's new / changelog ▾</button>
+      <div id="changelog-list" class="changelog-list" hidden></div>
     </div>
   </div>
 
@@ -142,6 +184,7 @@
           <button class="remove-exercise-btn" title="Remove exercise">✕</button>
         </div>
       </div>
+      <div class="bar-selector quick-pick-row"></div>
       <div class="sets-table">
         <div class="sets-head">
           <span>Set</span><span class="weight-head-label">Weight</span><span>Reps</span><span></span>
@@ -171,6 +214,6 @@
     </div>
   </template>
 
-  <script src="app.js?v=15"></script>
+  <script src="app.js?v=16"></script>
 </body>
 </html>
