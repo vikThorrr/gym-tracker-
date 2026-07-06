@@ -10,8 +10,13 @@ const STORAGE_KEYS = {
 
 // ---------- App version + changelog (semver: MAJOR.MINOR.PATCH) ----------
 // Newest first. Bump MINOR for features, PATCH for fixes. Displayed in Settings.
-const APP_VERSION = '1.9.0';
+const APP_VERSION = '1.10.0';
 const CHANGELOG = [
+  { version: '1.10.0', date: '2026-07-06', changes: [
+    'Swipe left-to-right on any sheet to close it',
+    'Fixed Settings not closing when the changelog was open',
+    'With a bar selected, weight chips now add plates on top of the bar (bar + plates = total)',
+  ] },
   { version: '1.9.0', date: '2026-07-04', changes: [
     'Tap the rest timer to stop it; Add Set restarts your rest countdown',
     'Set barbell & curl-bar weights in Settings — auto-included when logging',
@@ -610,6 +615,20 @@ function weightChipValues(exIndex, name) {
   return DEFAULT_WEIGHT_LADDER[settings.unit] || DEFAULT_WEIGHT_LADDER.lbs;
 }
 
+// When a bar is selected, the bottom chips are "added" weight (plates) and the
+// set records bar + plates. Centres on the plates from your last total.
+const DEFAULT_PLATE_LADDER = { lbs: [0, 25, 45, 90, 135], kg: [0, 10, 20, 40, 60] };
+function plateChipValues(exIndex, name, barW) {
+  const step = CHIP_WEIGHT_STEP[settings.unit] || 5;
+  const round1 = (v) => Math.round(v * 10) / 10;
+  const ref = getReferenceWeight(exIndex, name);
+  if (ref != null && ref - barW > 0) {
+    const p = ref - barW;
+    return [p - step * 2, p - step, p, p + step, p + step * 2].filter(v => v >= 0).map(round1);
+  }
+  return DEFAULT_PLATE_LADDER[settings.unit] || DEFAULT_PLATE_LADDER.lbs;
+}
+
 function setMinimized(exIndex, minimized) {
   minimizedByExercise[exIndex] = minimized;
   const card = exerciseList.children[exIndex];
@@ -686,20 +705,35 @@ function renderExercises() {
       const activeIdx = Math.min(activeSetIndexByExercise[exIndex], exercise.sets.length - 1);
       const activeSet = exercise.sets[activeIdx];
 
-      weightChipRow.innerHTML = weightChipValues(exIndex, exercise.name)
-        .map(v => `<button type="button" class="quick-chip ${String(v) === formatWeight(activeSet.weight) ? 'active' : ''}" data-value="${v}">${v}</button>`)
-        .join('');
+      const barW = barWeightFor(exercise);
+      const weightLabelEl = card.querySelector('.weight-pick-label');
+      if (barW > 0) {
+        // Bar selected: chips are added plate weight, and the set records bar + plates.
+        if (weightLabelEl) weightLabelEl.textContent = `Weight = ${formatWeight(barW)} ${settings.unit} bar + plates`;
+        const currentPlates = formatWeight(Math.max(0, (parseFloat(activeSet.weight) || 0) - barW));
+        weightChipRow.innerHTML = plateChipValues(exIndex, exercise.name, barW)
+          .map(p => {
+            const total = formatWeight(barW + p);
+            const active = String(p) === currentPlates ? 'active' : '';
+            return `<button type="button" class="quick-chip ${active}" data-total="${total}">+${p}</button>`;
+          }).join('');
+      } else {
+        if (weightLabelEl) weightLabelEl.textContent = 'Weight';
+        weightChipRow.innerHTML = weightChipValues(exIndex, exercise.name)
+          .map(v => `<button type="button" class="quick-chip ${String(v) === formatWeight(activeSet.weight) ? 'active' : ''}" data-total="${v}">${v}</button>`)
+          .join('');
+      }
       repsChipRow.innerHTML = REPS_CHIPS
         .map(v => `<button type="button" class="quick-chip ${String(v) === String(activeSet.reps) ? 'active' : ''}" data-value="${v}">${v}</button>`)
         .join('');
 
       weightChipRow.querySelectorAll('.quick-chip').forEach(chip => {
         chip.addEventListener('click', () => {
-          const value = chip.dataset.value;
-          exercise.sets[activeIdx].weight = value;
+          const total = chip.dataset.total;
+          exercise.sets[activeIdx].weight = total;
           saveCurrent();
           const input = setsBody.querySelector(`.set-row[data-set-index="${activeIdx}"] .weight-input`);
-          if (input) input.value = value;
+          if (input) input.value = total;
           renderMuscleSummary();
           handleSetCompletionCheck(exIndex, activeIdx);
           updateCompleteBadge(exIndex);
@@ -1067,6 +1101,30 @@ closeSettingsBtn.addEventListener('click', () => { settingsOverlay.hidden = true
 settingsOverlay.addEventListener('click', (e) => {
   if (e.target === settingsOverlay) settingsOverlay.hidden = true;
 });
+
+// Swipe left-to-right (or a clear downward flick) on a sheet dismisses it,
+// like the native iOS back/close gesture.
+function enableSwipeClose(sheetEl, closeFn) {
+  let startX = 0, startY = 0, tracking = false;
+  sheetEl.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) { tracking = false; return; }
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    tracking = true;
+  }, { passive: true });
+  sheetEl.addEventListener('touchend', (e) => {
+    if (!tracking) return;
+    tracking = false;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - startX;
+    const dy = t.clientY - startY;
+    // Swipe right: mostly-horizontal rightward flick.
+    if (dx > 80 && Math.abs(dy) < 60) closeFn();
+  }, { passive: true });
+}
+
+enableSwipeClose(settingsOverlay.querySelector('.picker-sheet'), () => { settingsOverlay.hidden = true; });
+enableSwipeClose(pickerOverlay.querySelector('.picker-sheet'), closePicker);
 unitButtons.forEach(btn => {
   btn.addEventListener('click', () => convertAllWeights(btn.dataset.unit));
 });

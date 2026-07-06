@@ -710,7 +710,19 @@ header h1 {
 /* ---------- Settings modal ---------- */
 
 .settings-sheet {
-  max-height: none;
+  max-height: 88vh;
+  overflow-y: auto;
+}
+
+/* Keep the close (✕) header pinned so Settings can always be dismissed,
+   even with the changelog expanded. */
+.settings-sheet .picker-header {
+  position: sticky;
+  top: -16px;
+  margin: -16px -16px 0;
+  padding: 16px 16px 10px;
+  background: var(--panel);
+  z-index: 2;
 }
 
 .settings-row {
