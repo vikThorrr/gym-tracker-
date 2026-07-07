@@ -15,7 +15,7 @@
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="manifest" href="manifest.json">
 
-<link rel="stylesheet" href="style.css?v=15">
+<link rel="stylesheet" href="style.css?v=17">
 </head>
 <body>
   <div class="app">
@@ -168,6 +168,25 @@
       </div>
       <button type="button" id="toggle-changelog-btn" class="unit-btn changelog-toggle">What's new / changelog ▾</button>
       <div id="changelog-list" class="changelog-list" hidden></div>
+
+      <button type="button" id="toggle-disclaimer-btn" class="unit-btn changelog-toggle">Disclaimer &amp; terms ▾</button>
+      <div id="disclaimer-content" class="changelog-list disclaimer-content" hidden></div>
+
+      <button type="button" id="replay-tutorial-btn" class="unit-btn changelog-toggle">Replay the intro tour</button>
+
+      <p class="dev-credit">Made by <strong>Victor</strong> · IronLog v<span id="credit-version"></span></p>
+    </div>
+  </div>
+
+  <!-- FIRST-RUN ONBOARDING TOUR -->
+  <div id="tutorial-overlay" class="tutorial-overlay" hidden>
+    <div class="tutorial-card">
+      <button type="button" id="tutorial-skip" class="tutorial-skip">Skip</button>
+      <div id="tutorial-icon" class="tutorial-icon"></div>
+      <h2 id="tutorial-title" class="tutorial-title"></h2>
+      <p id="tutorial-body" class="tutorial-body"></p>
+      <div id="tutorial-dots" class="tutorial-dots"></div>
+      <button type="button" id="tutorial-next" class="tutorial-next">Next</button>
     </div>
   </div>
 
@@ -216,6 +235,6 @@
     </div>
   </template>
 
-  <script src="app.js?v=19"></script>
+  <script src="app.js?v=21"></script>
 </body>
 </html>

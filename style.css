@@ -1163,3 +1163,114 @@ header h1 {
   margin: 4px 0 0 90px;
 }
 .split-days.stale-flag { color: #ff922b; font-weight: 600; }
+
+/* ---------- Disclaimer & developer credit ---------- */
+
+.disclaimer-content h4 {
+  margin: 12px 0 4px;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+.disclaimer-content h4:first-child { margin-top: 0; }
+.disclaimer-content p {
+  margin: 0 0 8px;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+.disclaimer-updated { font-style: italic; opacity: 0.8; }
+
+.dev-credit {
+  margin: 18px 0 0;
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+.dev-credit strong { color: var(--accent); font-weight: 700; }
+
+/* ---------- First-run onboarding tour ---------- */
+
+.tutorial-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(0, 0, 0, 0.78);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  padding-top: calc(24px + env(safe-area-inset-top));
+  padding-bottom: calc(24px + env(safe-area-inset-bottom));
+}
+.tutorial-overlay[hidden] { display: none; }
+
+.tutorial-card {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  padding: 30px 24px 24px;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.tutorial-skip {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tutorial-skip[hidden] { display: none; }
+
+.tutorial-icon {
+  font-size: 3.2rem;
+  line-height: 1;
+  margin-bottom: 12px;
+}
+.tutorial-title {
+  margin: 0 0 10px;
+  font-size: 1.3rem;
+}
+.tutorial-body {
+  margin: 0 0 22px;
+  font-size: 0.95rem;
+  color: var(--text-dim);
+  line-height: 1.55;
+}
+.tutorial-dots {
+  display: flex;
+  justify-content: center;
+  gap: 7px;
+  margin-bottom: 22px;
+}
+.tutorial-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border);
+  transition: width .2s, background .2s;
+}
+.tutorial-dot.active {
+  width: 22px;
+  border-radius: 4px;
+  background: var(--accent);
+}
+.tutorial-next {
+  width: 100%;
+  padding: 14px;
+  border: none;
+  border-radius: 12px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  font-size: 1rem;
+  cursor: pointer;
+}
+.tutorial-next:active { transform: scale(0.98); }

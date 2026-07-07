@@ -6,12 +6,32 @@ const STORAGE_KEYS = {
   pushSubscription: 'gymTracker.pushSubscription',
   deviceId: 'gymTracker.deviceId',
   barPrefs: 'gymTracker.barPrefs',
+  tutorialSeen: 'gymTracker.tutorialSeen',
 };
+
+// The intro tour shows on first open, and again once whenever this value
+// changes — bump it on releases where you want returning users to see the
+// tour again (leave it alone for small patches so they aren't nagged).
+const TUTORIAL_VERSION = '2026.07';
+const TUTORIAL_SLIDES = [
+  { icon: '🏋️', title: 'Welcome to IronLog', body: "Log every rep, track your rest, and watch your strength grow over time. Here's a 20-second tour." },
+  { icon: '📋', title: 'Log a workout', body: 'On Today, tap “+ Add Exercise”, pick by muscle group, then tap the weight & reps chips — barely any typing. Choose a bar and its weight is added for you.' },
+  { icon: '⏱️', title: 'Rest timer', body: 'Turn it on in Settings for a countdown, a sound, and a notification when it\'s time for your next set. Tap the timer to stop it; “Add Set” restarts it.' },
+  { icon: '📈', title: 'See your progress', body: 'The Stats tab shows your estimated 1-rep-max trend per exercise, this week\'s volume vs last week, your muscle split, and personal records.' },
+  { icon: '👆', title: 'A few tips', body: 'Swipe left/right to switch tabs. Your data stays private on your device — export a backup anytime from Settings. Let\'s go!' },
+];
 
 // ---------- App version + changelog (semver: MAJOR.MINOR.PATCH) ----------
 // Newest first. Bump MINOR for features, PATCH for fixes. Displayed in Settings.
-const APP_VERSION = '1.12.0';
+const APP_VERSION = '1.14.0';
 const CHANGELOG = [
+  { version: '1.14.0', date: '2026-07-07', changes: [
+    'New: a quick intro tour for first-time users (replayable in Settings)',
+  ] },
+  { version: '1.13.0', date: '2026-07-07', changes: [
+    'Added a Disclaimer & Terms section in Settings',
+    'Developer credit added',
+  ] },
   { version: '1.12.0', date: '2026-07-07', changes: [
     'New name & logo: welcome to IronLog',
     'Fixed the changelog being hard to read on phones',
@@ -78,6 +98,25 @@ const CHANGELOG = [
     'Log workouts: exercises, sets, reps, weight, and history',
   ] },
 ];
+
+// Disclaimer / Terms shown in Settings. Plain informational text — for full
+// commercial launch, have it reviewed by a legal professional in your region.
+const DISCLAIMER_HTML = `
+  <h4>Not medical advice</h4>
+  <p>IronLog is a personal fitness-tracking tool for informational purposes only. It does not provide medical, health, or professional training advice. Consult a qualified physician or certified trainer before starting, changing, or continuing any exercise program — especially if you have an injury or medical condition.</p>
+  <h4>Assumption of risk</h4>
+  <p>Strength training and physical exercise carry an inherent risk of serious injury. You use IronLog, and perform any exercise you record with it, entirely at your own risk. You are solely responsible for training safely, using correct form, and selecting appropriate weights.</p>
+  <h4>Estimates only</h4>
+  <p>Values such as estimated 1-rep max, volume, and progress trends are automatically calculated estimates for general guidance only. They may not reflect your actual capacity. Never attempt a lift based solely on a number shown in the app.</p>
+  <h4>Third-party links</h4>
+  <p>"Watch form video" opens third-party websites (such as YouTube) that IronLog does not own, control, or endorse, and is not responsible for their content or accuracy.</p>
+  <h4>Your data</h4>
+  <p>All your data is stored only on your own device. The developer cannot see, access, back up, or recover it. You are responsible for exporting your own backups. IronLog is not liable for any loss of data caused by clearing your browser, removing the app, device failure, or any other cause.</p>
+  <h4>No warranty &amp; limitation of liability</h4>
+  <p>IronLog is provided "as is", without warranties of any kind, express or implied. To the fullest extent permitted by law, the developer shall not be liable for any injury, loss, or damages of any kind arising from the use of, or inability to use, this app.</p>
+  <h4>Changes to these terms</h4>
+  <p>These terms may be updated from time to time. Continued use of IronLog after an update means you accept the revised terms.</p>
+  <p class="disclaimer-updated">Last updated: 7 July 2026</p>`;
 
 // Backend that schedules rest-timer push notifications (Cloudflare Worker).
 // Empty string disables all push scheduling (app works exactly as before).
@@ -151,6 +190,57 @@ const importBackupInput = document.getElementById('import-backup-input');
 const appVersionEl = document.getElementById('app-version');
 const toggleChangelogBtn = document.getElementById('toggle-changelog-btn');
 const changelogListEl = document.getElementById('changelog-list');
+const toggleDisclaimerBtn = document.getElementById('toggle-disclaimer-btn');
+const disclaimerContentEl = document.getElementById('disclaimer-content');
+const creditVersionEl = document.getElementById('credit-version');
+const replayTutorialBtn = document.getElementById('replay-tutorial-btn');
+
+const tutorialOverlay = document.getElementById('tutorial-overlay');
+const tutorialIconEl = document.getElementById('tutorial-icon');
+const tutorialTitleEl = document.getElementById('tutorial-title');
+const tutorialBodyEl = document.getElementById('tutorial-body');
+const tutorialDotsEl = document.getElementById('tutorial-dots');
+const tutorialNextBtn = document.getElementById('tutorial-next');
+const tutorialSkipBtn = document.getElementById('tutorial-skip');
+let tutorialIndex = 0;
+
+function renderTutorialSlide() {
+  const s = TUTORIAL_SLIDES[tutorialIndex];
+  const last = tutorialIndex === TUTORIAL_SLIDES.length - 1;
+  tutorialIconEl.textContent = s.icon;
+  tutorialTitleEl.textContent = s.title;
+  tutorialBodyEl.textContent = s.body;
+  tutorialDotsEl.innerHTML = TUTORIAL_SLIDES
+    .map((_, i) => `<span class="tutorial-dot ${i === tutorialIndex ? 'active' : ''}"></span>`)
+    .join('');
+  tutorialNextBtn.textContent = last ? 'Get started' : 'Next';
+  tutorialSkipBtn.hidden = last;
+}
+
+function openTutorial() {
+  tutorialIndex = 0;
+  renderTutorialSlide();
+  tutorialOverlay.hidden = false;
+}
+
+function closeTutorial() {
+  tutorialOverlay.hidden = true;
+  localStorage.setItem(STORAGE_KEYS.tutorialSeen, TUTORIAL_VERSION);
+}
+
+tutorialNextBtn.addEventListener('click', () => {
+  if (tutorialIndex < TUTORIAL_SLIDES.length - 1) {
+    tutorialIndex += 1;
+    renderTutorialSlide();
+  } else {
+    closeTutorial();
+  }
+});
+tutorialSkipBtn.addEventListener('click', closeTutorial);
+replayTutorialBtn.addEventListener('click', () => {
+  settingsOverlay.hidden = true;
+  openTutorial();
+});
 
 const statsEmpty = document.getElementById('stats-empty');
 const statsOverviewEl = document.getElementById('stats-overview');
@@ -1023,7 +1113,9 @@ function renderSettings() {
   barbellWeightInput.value = formatWeight(settings.barbellWeight);
   curlBarWeightInput.value = formatWeight(settings.curlBarWeight);
   appVersionEl.textContent = `v${APP_VERSION}`;
+  creditVersionEl.textContent = APP_VERSION;
   renderChangelog();
+  disclaimerContentEl.innerHTML = DISCLAIMER_HTML;
 
   renderNotificationPermissionState();
 }
@@ -1192,6 +1284,15 @@ toggleChangelogBtn.addEventListener('click', () => {
   if (willShow) {
     // Bring it into view within the scrollable settings sheet.
     requestAnimationFrame(() => toggleChangelogBtn.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  }
+});
+
+toggleDisclaimerBtn.addEventListener('click', () => {
+  const willShow = disclaimerContentEl.hidden;
+  disclaimerContentEl.hidden = !willShow;
+  toggleDisclaimerBtn.textContent = willShow ? 'Disclaimer & terms ▴' : 'Disclaimer & terms ▾';
+  if (willShow) {
+    requestAnimationFrame(() => toggleDisclaimerBtn.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   }
 });
 
@@ -1788,3 +1889,9 @@ renderStats();
 renderSettings();
 updateWakeLock();
 ensurePushSubscription();
+
+// Show the intro tour on first ever open, and once again whenever
+// TUTORIAL_VERSION changes (a notable new release).
+if (localStorage.getItem(STORAGE_KEYS.tutorialSeen) !== TUTORIAL_VERSION) {
+  openTutorial();
+}
