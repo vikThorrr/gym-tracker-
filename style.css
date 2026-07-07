@@ -845,11 +845,11 @@ header h1 {
 
 .subtab-btn {
   flex: 1;
-  padding: 9px 6px;
+  padding: 9px 3px;
   border: none;
   background: transparent;
   color: var(--text-dim);
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   font-weight: 600;
   border-radius: 8px;
   cursor: pointer;
@@ -1062,3 +1062,106 @@ header h1 {
   color: var(--text-dim);
   margin-bottom: 3px;
 }
+
+/* ---------- v1.11 analytics ---------- */
+
+.insight-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 14px;
+}
+.insight-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+}
+.insight-big {
+  font-size: 1.8rem;
+  font-weight: 800;
+  color: var(--accent);
+  margin-top: 2px;
+}
+.insight-unit {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.insight-sub {
+  margin-top: 6px;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+.trend {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.trend-up { color: var(--green); }
+.trend-down { color: #ff6b6b; }
+
+/* Progress sub-tab */
+.progress-select {
+  width: 100%;
+  padding: 11px 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  font-size: 0.95rem;
+  font-weight: 600;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.progress-caption, .split-caption {
+  margin: 10px 0 6px;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+}
+.progress-chart {
+  width: 100%;
+  height: auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px;
+}
+.progress-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  margin-top: 12px;
+}
+.progress-summary > div {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 6px;
+  text-align: center;
+}
+.progress-stat {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--accent);
+}
+.progress-stat.trend-up { color: var(--green); }
+.progress-stat.trend-down { color: #ff6b6b; }
+.progress-stat-label {
+  margin-top: 3px;
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  line-height: 1.2;
+}
+
+/* Muscle split extras */
+.split-block { margin-bottom: 12px; }
+.split-days {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  margin: 4px 0 0 90px;
+}
+.split-days.stale-flag { color: #ff922b; font-weight: 600; }

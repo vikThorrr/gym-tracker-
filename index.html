@@ -15,7 +15,7 @@
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="manifest" href="manifest.json">
 
-<link rel="stylesheet" href="style.css?v=13">
+<link rel="stylesheet" href="style.css?v=14">
 </head>
 <body>
   <div class="app">
@@ -58,11 +58,13 @@
       <section id="stats-tab" class="tab-panel">
         <div class="subtabs">
           <button class="subtab-btn active" data-subtab="overview">Overview</button>
-          <button class="subtab-btn" data-subtab="split">Muscle Split</button>
+          <button class="subtab-btn" data-subtab="progress">Progress</button>
+          <button class="subtab-btn" data-subtab="split">Muscles</button>
           <button class="subtab-btn" data-subtab="records">Records</button>
         </div>
 
         <div id="stats-overview" class="subtab-panel active"></div>
+        <div id="stats-progress" class="subtab-panel"></div>
         <div id="stats-split" class="subtab-panel"></div>
         <div id="stats-records" class="subtab-panel"></div>
 
@@ -214,6 +216,6 @@
     </div>
   </template>
 
-  <script src="app.js?v=17"></script>
+  <script src="app.js?v=18"></script>
 </body>
 </html>

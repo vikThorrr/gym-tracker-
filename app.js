@@ -10,8 +10,15 @@ const STORAGE_KEYS = {
 
 // ---------- App version + changelog (semver: MAJOR.MINOR.PATCH) ----------
 // Newest first. Bump MINOR for features, PATCH for fixes. Displayed in Settings.
-const APP_VERSION = '1.10.0';
+const APP_VERSION = '1.11.0';
 const CHANGELOG = [
+  { version: '1.11.0', date: '2026-07-07', changes: [
+    'Swipe left/right to switch between Today, History and Stats',
+    'New Progress tab: estimated 1-rep-max trend chart per exercise',
+    'Overview now shows this-week volume vs last week and training frequency',
+    'Muscles tab shows when each group was last trained (flags neglected ones)',
+    'Records now include estimated 1RM, not just top weight',
+  ] },
   { version: '1.10.0', date: '2026-07-06', changes: [
     'Swipe left-to-right on any sheet to close it',
     'Fixed Settings not closing when the changelog was open',
@@ -143,6 +150,7 @@ const changelogListEl = document.getElementById('changelog-list');
 
 const statsEmpty = document.getElementById('stats-empty');
 const statsOverviewEl = document.getElementById('stats-overview');
+const statsProgressEl = document.getElementById('stats-progress');
 const statsSplitEl = document.getElementById('stats-split');
 const statsRecordsEl = document.getElementById('stats-records');
 
@@ -1423,32 +1431,67 @@ function renderHistory() {
 
 // ---------- Stats tab ----------
 
+// Estimated one-rep max via the Epley formula — a standard way to compare
+// strength across different weight×rep combinations.
+function estimatedOneRepMax(weight, reps) {
+  const w = parseFloat(weight);
+  const r = parseFloat(reps);
+  if (!Number.isFinite(w) || !Number.isFinite(r) || r <= 0) return 0;
+  if (r === 1) return w;
+  return w * (1 + r / 30);
+}
+
+function sessionVolume(session) {
+  let v = 0;
+  session.exercises.forEach(ex => ex.sets.forEach(s => {
+    v += (parseFloat(s.weight) || 0) * (parseFloat(s.reps) || 0);
+  }));
+  return v;
+}
+
+function startOfWeek(dateLike) {
+  const d = new Date(dateLike);
+  d.setHours(0, 0, 0, 0);
+  const dow = (d.getDay() + 6) % 7; // Monday = 0
+  d.setDate(d.getDate() - dow);
+  return d;
+}
+
+let selectedProgressExercise = null;
+
 function computeOverviewStats() {
-  let totalSets = 0;
-  let totalVolume = 0;
-  let restTotal = 0;
-  let restCount = 0;
-  let durationTotal = 0;
-  let durationCount = 0;
+  let totalSets = 0, totalVolume = 0, restTotal = 0, restCount = 0, durationTotal = 0, durationCount = 0;
   const exerciseNames = new Set();
 
+  const now = new Date();
+  const thisWeekStart = startOfWeek(now).getTime();
+  const lastWeekStart = thisWeekStart - 7 * 86400000;
+  const sevenDaysAgo = now.getTime() - 7 * 86400000;
+  let thisWeekVolume = 0, lastWeekVolume = 0, workoutsThisWeek = 0, workoutsLast7 = 0;
+  let mostRecentWorkout = null;
+
   history.forEach(session => {
-    if (Number.isFinite(session.durationSeconds)) {
-      durationTotal += session.durationSeconds;
-      durationCount += 1;
-    }
+    const t = new Date(session.date).getTime();
+    const vol = sessionVolume(session);
+    if (t >= thisWeekStart) { thisWeekVolume += vol; workoutsThisWeek += 1; }
+    else if (t >= lastWeekStart) { lastWeekVolume += vol; }
+    if (t >= sevenDaysAgo) workoutsLast7 += 1;
+    if (mostRecentWorkout === null || t > mostRecentWorkout) mostRecentWorkout = t;
+
+    if (Number.isFinite(session.durationSeconds)) { durationTotal += session.durationSeconds; durationCount += 1; }
     session.exercises.forEach(ex => {
       exerciseNames.add(ex.name);
       ex.sets.forEach(s => {
         totalSets += 1;
         totalVolume += (parseFloat(s.weight) || 0) * (parseFloat(s.reps) || 0);
-        if (Number.isFinite(s.restSeconds)) {
-          restTotal += s.restSeconds;
-          restCount += 1;
-        }
+        if (Number.isFinite(s.restSeconds)) { restTotal += s.restSeconds; restCount += 1; }
       });
     });
   });
+
+  const daysSinceLast = mostRecentWorkout !== null
+    ? Math.floor((now.getTime() - mostRecentWorkout) / 86400000)
+    : null;
 
   return {
     totalWorkouts: history.length,
@@ -1457,17 +1500,176 @@ function computeOverviewStats() {
     uniqueExercises: exerciseNames.size,
     avgRestSeconds: restCount > 0 ? Math.round(restTotal / restCount) : null,
     avgWorkoutSeconds: durationCount > 0 ? Math.round(durationTotal / durationCount) : null,
+    thisWeekVolume: Math.round(thisWeekVolume),
+    lastWeekVolume: Math.round(lastWeekVolume),
+    workoutsThisWeek,
+    workoutsLast7,
+    daysSinceLast,
   };
+}
+
+function renderStatsOverview() {
+  const s = computeOverviewStats();
+
+  let volTrend = '';
+  if (s.lastWeekVolume > 0) {
+    const pct = Math.round(((s.thisWeekVolume - s.lastWeekVolume) / s.lastWeekVolume) * 100);
+    const cls = pct >= 0 ? 'trend-up' : 'trend-down';
+    volTrend = `<span class="trend ${cls}">${pct >= 0 ? '▲' : '▼'} ${Math.abs(pct)}% vs last week</span>`;
+  }
+
+  const restCard = s.avgRestSeconds !== null
+    ? `<div class="stat-card"><div class="stat-value">${formatRestTime(s.avgRestSeconds)}</div><div class="stat-label">Avg rest / set</div></div>` : '';
+  const durCard = s.avgWorkoutSeconds !== null
+    ? `<div class="stat-card"><div class="stat-value">${formatDuration(s.avgWorkoutSeconds)}</div><div class="stat-label">Avg workout</div></div>` : '';
+
+  const lastLabel = s.daysSinceLast === null ? '' : s.daysSinceLast === 0 ? ' · last workout today' : ` · last ${s.daysSinceLast}d ago`;
+
+  statsOverviewEl.innerHTML = `
+    <div class="insight-card">
+      <div class="insight-title">This week</div>
+      <div class="insight-big">${s.thisWeekVolume.toLocaleString()} <span class="insight-unit">${settings.unit} volume</span></div>
+      ${volTrend}
+      <div class="insight-sub">${s.workoutsThisWeek} workout${s.workoutsThisWeek === 1 ? '' : 's'} this week · ${s.workoutsLast7} in last 7 days${lastLabel}</div>
+    </div>
+    <div class="stat-grid">
+      <div class="stat-card"><div class="stat-value">${s.totalWorkouts}</div><div class="stat-label">Workouts</div></div>
+      <div class="stat-card"><div class="stat-value">${s.totalSets}</div><div class="stat-label">Total sets</div></div>
+      <div class="stat-card"><div class="stat-value">${s.totalVolume.toLocaleString()}</div><div class="stat-label">Volume (${settings.unit})</div></div>
+      <div class="stat-card"><div class="stat-value">${s.uniqueExercises}</div><div class="stat-label">Exercises</div></div>
+      ${restCard}
+      ${durCard}
+    </div>`;
+}
+
+// ----- Progress: per-exercise strength trend -----
+
+function exercisesInHistory() {
+  const seen = new Map();
+  history.forEach(session => {
+    const t = new Date(session.date).getTime();
+    session.exercises.forEach(ex => {
+      if (!seen.has(ex.name) || t > seen.get(ex.name)) seen.set(ex.name, t);
+    });
+  });
+  return [...seen.entries()].sort((a, b) => b[1] - a[1]).map(e => e[0]);
+}
+
+function progressSeriesFor(name) {
+  const series = [];
+  history
+    .slice()
+    .sort((a, b) => new Date(a.date) - new Date(b.date))
+    .forEach(session => {
+      const ex = session.exercises.find(e => e.name.toLowerCase() === name.toLowerCase());
+      if (!ex) return;
+      let best = 0;
+      ex.sets.forEach(s => { best = Math.max(best, estimatedOneRepMax(s.weight, s.reps)); });
+      if (best > 0) series.push({ date: session.date, value: Math.round(best * 10) / 10 });
+    });
+  return series;
+}
+
+function buildLineChart(series) {
+  if (series.length < 2) return '<p class="empty-msg">Log this exercise on at least 2 days to see a trend.</p>';
+  const W = 320, H = 150, padL = 30, padR = 10, padT = 12, padB = 14;
+  const vals = series.map(s => s.value);
+  const minV = Math.min(...vals), maxV = Math.max(...vals);
+  const range = (maxV - minV) || 1;
+  const n = series.length;
+  const x = i => padL + (i / (n - 1)) * (W - padL - padR);
+  const y = v => padT + (1 - (v - minV) / range) * (H - padT - padB);
+  const line = series.map((s, i) => `${x(i).toFixed(1)},${y(s.value).toFixed(1)}`).join(' ');
+  const dots = series.map((s, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(s.value).toFixed(1)}" r="2.5" fill="var(--accent)"/>`).join('');
+  return `
+    <svg viewBox="0 0 ${W} ${H}" class="progress-chart" preserveAspectRatio="xMidYMid meet">
+      <line x1="${padL}" y1="${y(maxV).toFixed(1)}" x2="${W - padR}" y2="${y(maxV).toFixed(1)}" stroke="var(--border)" stroke-width="0.5"/>
+      <line x1="${padL}" y1="${y(minV).toFixed(1)}" x2="${W - padR}" y2="${y(minV).toFixed(1)}" stroke="var(--border)" stroke-width="0.5"/>
+      <text x="${padL - 3}" y="${(y(maxV) + 3).toFixed(1)}" text-anchor="end" fill="var(--text-dim)" font-size="8">${formatWeight(maxV)}</text>
+      <text x="${padL - 3}" y="${(y(minV) + 3).toFixed(1)}" text-anchor="end" fill="var(--text-dim)" font-size="8">${formatWeight(minV)}</text>
+      <polyline points="${line}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/>
+      ${dots}
+    </svg>`;
+}
+
+function renderStatsProgress() {
+  const exercises = exercisesInHistory();
+  if (exercises.length === 0) {
+    statsProgressEl.innerHTML = '<p class="empty-msg">No workouts logged yet.</p>';
+    return;
+  }
+  if (!selectedProgressExercise || !exercises.includes(selectedProgressExercise)) {
+    selectedProgressExercise = exercises[0];
+  }
+  const series = progressSeriesFor(selectedProgressExercise);
+
+  let summary = '';
+  if (series.length >= 2) {
+    const first = series[0].value, last = series[series.length - 1].value;
+    const best = Math.max(...series.map(s => s.value));
+    const delta = Math.round((last - first) * 10) / 10;
+    const cls = delta >= 0 ? 'trend-up' : 'trend-down';
+    summary = `
+      <div class="progress-summary">
+        <div><div class="progress-stat">${formatWeight(last)}</div><div class="progress-stat-label">Est. 1RM now (${settings.unit})</div></div>
+        <div><div class="progress-stat ${cls}">${delta >= 0 ? '+' : ''}${formatWeight(delta)}</div><div class="progress-stat-label">Over ${series.length} days</div></div>
+        <div><div class="progress-stat">${formatWeight(best)}</div><div class="progress-stat-label">Best</div></div>
+      </div>`;
+  }
+
+  const options = exercises
+    .map(n => `<option value="${escapeHtml(n)}" ${n === selectedProgressExercise ? 'selected' : ''}>${escapeHtml(n)}</option>`)
+    .join('');
+  statsProgressEl.innerHTML = `
+    <select id="progress-exercise-select" class="progress-select">${options}</select>
+    <div class="progress-caption">Estimated 1-rep max per session (Epley)</div>
+    ${buildLineChart(series)}
+    ${summary}`;
+
+  const sel = document.getElementById('progress-exercise-select');
+  sel.addEventListener('change', () => { selectedProgressExercise = sel.value; renderStatsProgress(); });
 }
 
 function computeMuscleSplit() {
   const counts = {};
+  const lastTrained = {};
   history.forEach(session => {
+    const t = new Date(session.date).getTime();
     session.exercises.forEach(ex => {
       counts[ex.muscleGroup] = (counts[ex.muscleGroup] || 0) + ex.sets.length;
+      if (!lastTrained[ex.muscleGroup] || t > lastTrained[ex.muscleGroup]) lastTrained[ex.muscleGroup] = t;
     });
   });
-  return counts;
+  return { counts, lastTrained };
+}
+
+function renderStatsSplit() {
+  const { counts, lastTrained } = computeMuscleSplit();
+  const max = Math.max(1, ...Object.values(counts));
+  const now = Date.now();
+  const rows = [...MUSCLE_GROUPS, CUSTOM_GROUP]
+    .filter(g => counts[g.id])
+    .sort((a, b) => counts[b.id] - counts[a.id])
+    .map(g => {
+      const pct = Math.round((counts[g.id] / max) * 100);
+      const days = Math.floor((now - lastTrained[g.id]) / 86400000);
+      const label = days === 0 ? 'today' : days === 1 ? 'yesterday' : `${days}d ago`;
+      const staleCls = days >= 7 ? 'split-days stale-flag' : 'split-days';
+      return `
+        <div class="split-block">
+          <div class="split-row">
+            <span class="split-label" style="color:${g.color}">${g.label}</span>
+            <div class="split-bar-track"><div class="split-bar-fill" style="width:${pct}%; background:${g.color}"></div></div>
+            <span class="split-count">${counts[g.id]}</span>
+          </div>
+          <div class="${staleCls}">last trained ${label}${days >= 7 ? ' — consider training it soon' : ''}</div>
+        </div>`;
+    })
+    .join('');
+
+  statsSplitEl.innerHTML = rows
+    ? `<div class="split-caption">Sets per muscle group (all time)</div>${rows}`
+    : '<p class="empty-msg">No sets logged yet.</p>';
 }
 
 function computeRecords() {
@@ -1477,9 +1679,13 @@ function computeRecords() {
       ex.sets.forEach(s => {
         const weight = parseFloat(s.weight);
         if (!Number.isFinite(weight)) return;
+        const e1rm = estimatedOneRepMax(s.weight, s.reps);
         const existing = records[ex.name];
-        if (!existing || weight > existing.weight) {
-          records[ex.name] = { weight, reps: s.reps, muscleGroup: ex.muscleGroup, date: session.date };
+        if (!existing) {
+          records[ex.name] = { weight, reps: s.reps, muscleGroup: ex.muscleGroup, date: session.date, best1rm: e1rm };
+        } else {
+          if (weight > existing.weight) { existing.weight = weight; existing.reps = s.reps; existing.date = session.date; }
+          if (e1rm > existing.best1rm) existing.best1rm = e1rm;
         }
       });
     });
@@ -1487,65 +1693,10 @@ function computeRecords() {
   return records;
 }
 
-function renderStatsOverview() {
-  const stats = computeOverviewStats();
-  statsOverviewEl.innerHTML = `
-    <div class="stat-grid">
-      <div class="stat-card">
-        <div class="stat-value">${stats.totalWorkouts}</div>
-        <div class="stat-label">Workouts logged</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-value">${stats.totalSets}</div>
-        <div class="stat-label">Total sets</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-value">${stats.totalVolume.toLocaleString()}</div>
-        <div class="stat-label">Volume lifted (${settings.unit})</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-value">${stats.uniqueExercises}</div>
-        <div class="stat-label">Exercises tried</div>
-      </div>
-      ${stats.avgRestSeconds !== null ? `
-      <div class="stat-card">
-        <div class="stat-value">${formatRestTime(stats.avgRestSeconds)}</div>
-        <div class="stat-label">Avg rest between sets</div>
-      </div>` : ''}
-      ${stats.avgWorkoutSeconds !== null ? `
-      <div class="stat-card">
-        <div class="stat-value">${formatDuration(stats.avgWorkoutSeconds)}</div>
-        <div class="stat-label">Avg workout length</div>
-      </div>` : ''}
-    </div>`;
-}
-
-function renderStatsSplit() {
-  const counts = computeMuscleSplit();
-  const max = Math.max(1, ...Object.values(counts));
-  const rows = [...MUSCLE_GROUPS, CUSTOM_GROUP]
-    .filter(g => counts[g.id])
-    .sort((a, b) => counts[b.id] - counts[a.id])
-    .map(g => {
-      const pct = Math.round((counts[g.id] / max) * 100);
-      return `
-        <div class="split-row">
-          <span class="split-label" style="color:${g.color}">${g.label}</span>
-          <div class="split-bar-track">
-            <div class="split-bar-fill" style="width:${pct}%; background:${g.color}"></div>
-          </div>
-          <span class="split-count">${counts[g.id]}</span>
-        </div>`;
-    })
-    .join('');
-
-  statsSplitEl.innerHTML = rows || '<p class="empty-msg">No sets logged yet.</p>';
-}
-
 function renderStatsRecords() {
   const records = computeRecords();
   const rows = Object.entries(records)
-    .sort((a, b) => b[1].weight - a[1].weight)
+    .sort((a, b) => b[1].best1rm - a[1].best1rm)
     .map(([name, r]) => {
       const meta = groupMeta(r.muscleGroup);
       return `
@@ -1554,7 +1705,7 @@ function renderStatsRecords() {
             <span class="muscle-badge" style="--badge-color:${meta.color}">${meta.label}</span>
             ${escapeHtml(name)}
           </div>
-          <div class="history-sets">${formatWeight(r.weight)}×${r.reps} <span class="unit-suffix">${settings.unit}</span> — ${formatDate(r.date)}</div>
+          <div class="history-sets">Top set ${formatWeight(r.weight)}×${r.reps} · est. 1RM <strong>${formatWeight(r.best1rm)} ${settings.unit}</strong></div>
         </div>`;
     })
     .join('');
@@ -1565,20 +1716,50 @@ function renderStatsRecords() {
 function renderStats() {
   statsEmpty.hidden = history.length > 0;
   renderStatsOverview();
+  renderStatsProgress();
   renderStatsSplit();
   renderStatsRecords();
 }
 
 // ---------- Tabs ----------
 
+const TAB_ORDER = ['workout', 'history', 'stats'];
+
+function switchToTab(tabName) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tabName));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === `${tabName}-tab`));
+}
+
 document.querySelectorAll('.tab-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById(`${btn.dataset.tab}-tab`).classList.add('active');
-  });
+  btn.addEventListener('click', () => switchToTab(btn.dataset.tab));
 });
+
+// Swipe left/right across the main area to move between the Today/History/Stats
+// tabs. Ignored while a modal sheet is open, and only fires on a clear
+// horizontal swipe so it doesn't interfere with vertical scrolling or taps.
+(function enableTabSwipe() {
+  const mainEl = document.querySelector('main');
+  let sx = 0, sy = 0, tracking = false;
+  mainEl.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) { tracking = false; return; }
+    sx = e.touches[0].clientX;
+    sy = e.touches[0].clientY;
+    tracking = true;
+  }, { passive: true });
+  mainEl.addEventListener('touchend', (e) => {
+    if (!tracking) return;
+    tracking = false;
+    if (!settingsOverlay.hidden || !pickerOverlay.hidden) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - sx;
+    const dy = t.clientY - sy;
+    if (Math.abs(dx) < 60 || Math.abs(dy) > 45) return;
+    const cur = document.querySelector('.tab-btn.active').dataset.tab;
+    const idx = TAB_ORDER.indexOf(cur);
+    if (dx < 0 && idx < TAB_ORDER.length - 1) switchToTab(TAB_ORDER[idx + 1]);
+    else if (dx > 0 && idx > 0) switchToTab(TAB_ORDER[idx - 1]);
+  }, { passive: true });
+})();
 
 document.querySelectorAll('.subtab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
