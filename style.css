@@ -1032,8 +1032,6 @@ header h1 {
 }
 .changelog-list {
   margin-top: 10px;
-  max-height: 260px;
-  overflow-y: auto;
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 12px;

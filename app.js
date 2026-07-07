@@ -10,8 +10,12 @@ const STORAGE_KEYS = {
 
 // ---------- App version + changelog (semver: MAJOR.MINOR.PATCH) ----------
 // Newest first. Bump MINOR for features, PATCH for fixes. Displayed in Settings.
-const APP_VERSION = '1.11.0';
+const APP_VERSION = '1.12.0';
 const CHANGELOG = [
+  { version: '1.12.0', date: '2026-07-07', changes: [
+    'New name & logo: welcome to IronLog',
+    'Fixed the changelog being hard to read on phones',
+  ] },
   { version: '1.11.0', date: '2026-07-07', changes: [
     'Swipe left/right to switch between Today, History and Stats',
     'New Progress tab: estimated 1-rep-max trend chart per exercise',
@@ -1185,13 +1189,17 @@ toggleChangelogBtn.addEventListener('click', () => {
   const willShow = changelogListEl.hidden;
   changelogListEl.hidden = !willShow;
   toggleChangelogBtn.textContent = willShow ? "What's new / changelog ▴" : "What's new / changelog ▾";
+  if (willShow) {
+    // Bring it into view within the scrollable settings sheet.
+    requestAnimationFrame(() => toggleChangelogBtn.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  }
 });
 
 // ---------- Backup & restore (JSON) ----------
 
 function exportBackup() {
   const payload = {
-    app: 'gym-tracker',
+    app: 'ironlog',
     version: APP_VERSION,
     exportedAt: new Date().toISOString(),
     data: { current, history, customExercises, settings, barPrefs },
@@ -1200,7 +1208,7 @@ function exportBackup() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `gym-tracker-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  a.download = `ironlog-backup-${new Date().toISOString().slice(0, 10)}.json`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -1215,11 +1223,11 @@ function importBackup(file) {
       const parsed = JSON.parse(reader.result);
       d = parsed && parsed.data ? parsed.data : parsed;
     } catch (e) {
-      alert('Could not read that file — is it a valid Gym Tracker backup?');
+      alert('Could not read that file — is it a valid IronLog backup?');
       return;
     }
     if (!d || (!Array.isArray(d.history) && !d.current)) {
-      alert('This does not look like a Gym Tracker backup file.');
+      alert('This does not look like an IronLog backup file.');
       return;
     }
     if (!confirm('Restore this backup? It will REPLACE all data currently on this device.')) return;
@@ -1346,7 +1354,7 @@ function exportHistoryCsv() {
   const a = document.createElement('a');
   const dateStamp = new Date().toISOString().slice(0, 10);
   a.href = url;
-  a.download = `gym-tracker-history-${dateStamp}.csv`;
+  a.download = `ironlog-history-${dateStamp}.csv`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

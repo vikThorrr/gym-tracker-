@@ -1,4 +1,4 @@
-// Gym Tracker service worker: receives rest-timer push notifications.
+// IronLog service worker: receives rest-timer push notifications.
 // Deliberately no fetch/caching handlers — the app stays served fresh from
 // the network; this worker exists only for Web Push.
 

@@ -1,7 +1,7 @@
 {
-  "name": "Gym Tracker",
-  "short_name": "Gym Tracker",
-  "description": "Log workouts by muscle group, track rest time, and see your progress.",
+  "name": "IronLog",
+  "short_name": "IronLog",
+  "description": "Log every rep, track rest, and watch your strength grow. Workout logging with muscle-group insights and 1RM progress.",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#0f1115",
