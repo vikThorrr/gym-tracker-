@@ -30,7 +30,6 @@ const CHANGELOG = [
   ] },
   { version: '1.13.0', date: '2026-07-07', changes: [
     'Added a Disclaimer & Terms section in Settings',
-    'Developer credit added',
   ] },
   { version: '1.12.0', date: '2026-07-07', changes: [
     'New name & logo: welcome to IronLog',

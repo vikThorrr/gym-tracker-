@@ -1186,7 +1186,7 @@ header h1 {
   font-size: 0.78rem;
   color: var(--text-dim);
 }
-.dev-credit strong { color: var(--accent); font-weight: 700; }
+.dev-credit strong { color: var(--text); font-weight: 700; }
 
 /* ---------- First-run onboarding tour ---------- */
 
