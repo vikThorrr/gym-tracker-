@@ -1274,3 +1274,332 @@ header h1 {
   cursor: pointer;
 }
 .tutorial-next:active { transform: scale(0.98); }
+
+/* ---------- v2.0 Planner ---------- */
+
+.plan-intro {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  margin: 0 0 16px;
+}
+.plan-intro strong { color: var(--text); }
+
+.plan-day-select {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.plan-day-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+.plan-day-chip {
+  padding: 8px 14px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.plan-day-chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.plan-date-input {
+  flex-shrink: 0;
+  padding: 8px 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  font-size: 0.82rem;
+  font-family: inherit;
+  min-width: 0;
+  max-width: 140px;
+}
+.plan-date-input:focus { outline: none; border-color: var(--accent); }
+
+.plan-editor-head { margin-bottom: 12px; }
+.plan-title-input {
+  width: 100%;
+  padding: 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+.plan-title-input:focus { outline: none; border-color: var(--accent); }
+
+.plan-exercise-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.plan-exercise-list:empty { margin-bottom: 0; }
+
+.plan-exercise-row {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.plan-exercise-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.plan-exercise-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.plan-exercise-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.plan-stepper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 6px;
+}
+.plan-step-btn {
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--accent);
+  font-size: 1.1rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+.plan-step-btn:active { transform: scale(0.9); }
+.plan-step-value {
+  min-width: 18px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+.plan-step-unit {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.plan-remove-btn {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 4px 6px;
+}
+.plan-remove-btn:hover { color: var(--accent); }
+
+.plan-suggest-btn {
+  width: 100%;
+  margin-top: 10px;
+  padding: 13px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+.plan-clear-btn {
+  width: 100%;
+  margin-top: 10px;
+  padding: 10px;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.plan-clear-btn:hover { color: var(--accent); }
+.plan-clear-btn[hidden] { display: none; }
+
+.plan-upcoming-wrap { margin-top: 20px; }
+.plan-upcoming:empty { display: none; }
+.plan-upcoming-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+.plan-upcoming-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  margin-bottom: 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
+.plan-upcoming-item:hover { border-color: var(--accent); }
+.plan-upcoming-day {
+  font-weight: 700;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+.plan-upcoming-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}
+.plan-upcoming-meta {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+
+/* Today: "planned for today" banner */
+.plan-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  margin-bottom: 16px;
+  background: var(--accent-dim);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+}
+.plan-banner[hidden] { display: none; }
+.plan-banner-main { flex: 1; min-width: 0; }
+.plan-banner-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+}
+.plan-banner-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.plan-banner-meta {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+.plan-banner-start {
+  flex-shrink: 0;
+  padding: 12px 22px;
+  border: none;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+.plan-banner-start:active { transform: scale(0.97); }
+
+/* Plan target line + set progress on exercise cards */
+.plan-target {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  margin: -2px 0 10px;
+}
+.plan-target[hidden] { display: none; }
+.exercise-card.minimized .plan-target { display: none; }
+
+.set-progress {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--accent-dim);
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+.set-progress[hidden] { display: none; }
+
+/* Per-set done state */
+.set-row.set-complete .set-index {
+  color: var(--green);
+  font-weight: 800;
+}
+.set-row.set-complete .weight-input,
+.set-row.set-complete .reps-input {
+  border-color: color-mix(in srgb, var(--green) 45%, var(--border));
+}
+
+/* Body-profile sex toggle (mirrors theme-btn) */
+.sex-btn {
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-weight: 600;
+  font-size: 0.85rem;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.sex-btn.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* Calories */
+.history-cal {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #ff922b;
+  margin-left: 6px;
+}
+.cal-prompt {
+  margin-top: 14px;
+  padding: 12px 14px;
+  background: var(--panel);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  color: var(--text-dim);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  text-align: center;
+}
+.cal-prompt strong { color: var(--text); }

@@ -15,7 +15,7 @@
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="manifest" href="manifest.json">
 
-<link rel="stylesheet" href="style.css?v=18">
+<link rel="stylesheet" href="style.css?v=19">
 </head>
 <body>
   <div class="app">
@@ -26,6 +26,7 @@
       </div>
       <div class="tabs">
         <button class="tab-btn active" data-tab="workout">Today</button>
+        <button class="tab-btn" data-tab="plan">Plan</button>
         <button class="tab-btn" data-tab="history">History</button>
         <button class="tab-btn" data-tab="stats">Stats</button>
       </div>
@@ -39,12 +40,39 @@
           <span id="workout-duration" class="workout-duration" hidden></span>
         </div>
 
+        <div id="today-plan-banner" class="plan-banner" hidden></div>
+
         <div id="muscle-summary" class="muscle-summary"></div>
 
         <div id="exercise-list" class="exercise-list"></div>
 
         <button id="open-picker-btn" class="add-exercise-cta">+ Add Exercise</button>
         <button id="finish-btn" class="primary-btn finish-btn-full">Finish Workout</button>
+      </section>
+
+      <!-- PLAN TAB -->
+      <section id="plan-tab" class="tab-panel">
+        <p class="plan-intro">Plan a workout ahead of time. When that day arrives, open Today and tap <strong>Start</strong> to tick off each set as you go.</p>
+
+        <div class="plan-day-select">
+          <div class="plan-day-chips" id="plan-day-chips"></div>
+          <input type="date" id="plan-date-input" class="plan-date-input">
+        </div>
+
+        <div class="plan-editor-head">
+          <input type="text" id="plan-title-input" class="plan-title-input" placeholder="Plan name (optional)" autocomplete="off">
+        </div>
+
+        <div id="plan-exercise-list" class="plan-exercise-list"></div>
+        <p id="plan-empty" class="empty-msg">No exercises planned for this day yet.</p>
+
+        <button id="plan-add-btn" class="add-exercise-cta">+ Add Exercise to Plan</button>
+        <button id="plan-suggest-btn" class="unit-btn plan-suggest-btn">✨ Suggest a plan for me</button>
+        <button id="plan-clear-btn" class="plan-clear-btn" hidden>Clear this day's plan</button>
+
+        <div class="plan-upcoming-wrap">
+          <div id="plan-upcoming" class="plan-upcoming"></div>
+        </div>
       </section>
 
       <!-- HISTORY TAB -->
@@ -150,6 +178,29 @@
 
       <div class="settings-divider"></div>
 
+      <div class="settings-row">
+        <span class="settings-label">Sex</span>
+        <div class="unit-toggle">
+          <button class="sex-btn" data-sex="male">Male</button>
+          <button class="sex-btn" data-sex="female">Female</button>
+        </div>
+      </div>
+      <div class="settings-row">
+        <span class="settings-label">Body weight (<span class="unit-label">lbs</span>)</span>
+        <input type="number" id="body-weight-input" class="settings-number" min="0" step="0.5" inputmode="decimal">
+      </div>
+      <div class="settings-row">
+        <span class="settings-label">Height (cm)</span>
+        <input type="number" id="height-input" class="settings-number" min="0" step="1" inputmode="numeric">
+      </div>
+      <div class="settings-row">
+        <span class="settings-label">Age</span>
+        <input type="number" id="age-input" class="settings-number" min="0" step="1" inputmode="numeric">
+      </div>
+      <p class="settings-hint">Used to estimate calories burned in your workout Stats. Stored only on this device.</p>
+
+      <div class="settings-divider"></div>
+
       <div class="settings-row settings-row-stack">
         <span class="settings-label">Backup &amp; restore</span>
         <div class="backup-buttons">
@@ -199,12 +250,14 @@
           <a class="watch-form-btn card-watch-form" href="#" target="_blank" rel="noopener noreferrer" title="Watch form video">▶</a>
         </div>
         <div class="exercise-header-right">
+          <span class="set-progress" hidden></span>
           <span class="complete-badge" hidden>✓ Done</span>
           <span class="last-time"></span>
           <button class="toggle-collapse-btn" title="Collapse/Expand">⌄</button>
           <button class="remove-exercise-btn" title="Remove exercise">✕</button>
         </div>
       </div>
+      <div class="plan-target" hidden></div>
       <div class="bar-selector quick-pick-row"></div>
       <div class="sets-table">
         <div class="sets-head">
@@ -235,6 +288,6 @@
     </div>
   </template>
 
-  <script src="app.js?v=22"></script>
+  <script src="app.js?v=23"></script>
 </body>
 </html>

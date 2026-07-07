@@ -7,24 +7,33 @@ const STORAGE_KEYS = {
   deviceId: 'gymTracker.deviceId',
   barPrefs: 'gymTracker.barPrefs',
   tutorialSeen: 'gymTracker.tutorialSeen',
+  plans: 'gymTracker.plans',
 };
 
 // The intro tour shows on first open, and again once whenever this value
 // changes — bump it on releases where you want returning users to see the
 // tour again (leave it alone for small patches so they aren't nagged).
-const TUTORIAL_VERSION = '2026.07';
+const TUTORIAL_VERSION = '2026.07b';
 const TUTORIAL_SLIDES = [
   { icon: '🏋️', title: 'Welcome to IronLog', body: "Log every rep, track your rest, and watch your strength grow over time. Here's a 20-second tour." },
   { icon: '📋', title: 'Log a workout', body: 'On Today, tap “+ Add Exercise”, pick by muscle group, then tap the weight & reps chips — barely any typing. Choose a bar and its weight is added for you.' },
+  { icon: '🗓️', title: 'Plan ahead', body: 'New: use the Plan tab to set up tomorrow\'s workout in advance — or tap “Suggest a plan” to have IronLog build a balanced one for you. When the day comes, tap Start on Today and tick off each set.' },
   { icon: '⏱️', title: 'Rest timer', body: 'Turn it on in Settings for a countdown, a sound, and a notification when it\'s time for your next set. Tap the timer to stop it; “Add Set” restarts it.' },
-  { icon: '📈', title: 'See your progress', body: 'The Stats tab shows your estimated 1-rep-max trend per exercise, this week\'s volume vs last week, your muscle split, and personal records.' },
+  { icon: '🔥', title: 'Stats & calories', body: 'The Stats tab shows your estimated 1-rep-max trend, weekly volume, muscle split, and records. Add your body profile in Settings to also see calories burned.' },
   { icon: '👆', title: 'A few tips', body: 'Swipe left/right to switch tabs. Your data stays private on your device — export a backup anytime from Settings. Let\'s go!' },
 ];
 
 // ---------- App version + changelog (semver: MAJOR.MINOR.PATCH) ----------
 // Newest first. Bump MINOR for features, PATCH for fixes. Displayed in Settings.
-const APP_VERSION = '1.14.0';
+const APP_VERSION = '2.0.0';
 const CHANGELOG = [
+  { version: '2.0.0', date: '2026-07-08', changes: [
+    'New Plan tab: set up a workout in advance for any day (like tomorrow)',
+    'Start a planned workout on Today and tick off each set as you complete it',
+    'Let IronLog suggest a balanced plan based on the muscles you\'ve been neglecting',
+    'New: calories burned per workout — add your body profile (sex, weight, height, age) in Settings',
+    'Stats now show calories this week and all-time; History shows calories per workout',
+  ] },
   { version: '1.14.0', date: '2026-07-07', changes: [
     'New: a quick intro tour for first-time users (replayable in Settings)',
   ] },
@@ -247,12 +256,58 @@ const statsProgressEl = document.getElementById('stats-progress');
 const statsSplitEl = document.getElementById('stats-split');
 const statsRecordsEl = document.getElementById('stats-records');
 
+// Plan tab
+const planDayChipsEl = document.getElementById('plan-day-chips');
+const planDateInput = document.getElementById('plan-date-input');
+const planTitleInput = document.getElementById('plan-title-input');
+const planExerciseListEl = document.getElementById('plan-exercise-list');
+const planEmptyEl = document.getElementById('plan-empty');
+const planAddBtn = document.getElementById('plan-add-btn');
+const planSuggestBtn = document.getElementById('plan-suggest-btn');
+const planClearBtn = document.getElementById('plan-clear-btn');
+const planUpcomingEl = document.getElementById('plan-upcoming');
+const todayPlanBanner = document.getElementById('today-plan-banner');
+
+// Body profile (Settings)
+const sexButtons = document.querySelectorAll('.sex-btn');
+const bodyWeightInput = document.getElementById('body-weight-input');
+const heightInput = document.getElementById('height-input');
+const ageInput = document.getElementById('age-input');
+
 let current = loadCurrent();
 let history = loadHistory();
 let customExercises = loadCustomExercises();
 let settings = loadSettings();
 let barPrefs = loadBarPrefs();
+let plans = loadPlans();
 let activeGroupId = 'all';
+// Whether the exercise picker is adding to the live session or to a plan.
+let pickerMode = 'session';
+
+// ---------- Date-key helpers (plans are keyed by local calendar day) ----------
+function dateKey(dateLike) {
+  const d = dateLike ? new Date(dateLike) : new Date();
+  // Local-time YYYY-MM-DD (not UTC) so "today" matches the user's calendar.
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+function todayKey() { return dateKey(new Date()); }
+function tomorrowKey() {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  return dateKey(d);
+}
+function formatPlanDay(key) {
+  const [y, m, d] = key.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  if (key === todayKey()) return 'Today';
+  if (key === tomorrowKey()) return 'Tomorrow';
+  return date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+}
+// The day currently being edited on the Plan tab.
+let planDate = tomorrowKey();
 
 // ---------- Theme ----------
 function applyTheme() {
@@ -302,9 +357,22 @@ function loadSettings() {
     theme: 'dark',
     barbellWeight: 45,   // Olympic barbell (lbs default)
     curlBarWeight: 25,   // EZ / curl bar (lbs default)
+    // Body profile for the calorie estimate (empty until the user fills it in).
+    sex: '',             // 'male' | 'female'
+    bodyWeight: '',      // in settings.unit
+    height: '',          // always centimetres
+    age: '',             // years
   };
   return raw ? { ...defaults, ...JSON.parse(raw) } : defaults;
 }
+
+// ---------- Workout plans (schedule a workout for a future day) ----------
+// Stored as { 'YYYY-MM-DD': { title, exercises: [{ name, muscleGroup, targetSets, targetReps }] } }
+function loadPlans() {
+  const raw = localStorage.getItem(STORAGE_KEYS.plans);
+  return raw ? JSON.parse(raw) : {};
+}
+function savePlans() { localStorage.setItem(STORAGE_KEYS.plans, JSON.stringify(plans)); }
 
 function loadBarPrefs() {
   const raw = localStorage.getItem(STORAGE_KEYS.barPrefs);
@@ -755,6 +823,13 @@ function renderExercises() {
     card.querySelector('.weight-head-label').textContent = `Weight (${settings.unit})`;
     card.querySelector('.complete-badge').hidden = !(exercise.sets.length > 0 && exercise.sets.every(isSetComplete));
 
+    const planTargetEl = card.querySelector('.plan-target');
+    if (planTargetEl && exercise.planned) {
+      const repsText = exercise.targetReps ? ` × ${exercise.targetReps} reps` : '';
+      planTargetEl.hidden = false;
+      planTargetEl.textContent = `🗓️ Plan target: ${exercise.sets.length} sets${repsText}`;
+    }
+
     const isMinimized = !!minimizedByExercise[exIndex];
     cardEl.classList.toggle('minimized', isMinimized);
     const collapseBtn = card.querySelector('.toggle-collapse-btn');
@@ -838,6 +913,8 @@ function renderExercises() {
           renderMuscleSummary();
           handleSetCompletionCheck(exIndex, activeIdx);
           updateCompleteBadge(exIndex);
+          refreshSetRowState(exIndex, activeIdx);
+          updateSetProgress(exIndex);
           refreshChips();
         });
       });
@@ -851,6 +928,8 @@ function renderExercises() {
           renderMuscleSummary();
           handleSetCompletionCheck(exIndex, activeIdx);
           updateCompleteBadge(exIndex);
+          refreshSetRowState(exIndex, activeIdx);
+          updateSetProgress(exIndex);
           refreshChips();
         });
       });
@@ -904,6 +983,7 @@ function renderExercises() {
 
     exerciseList.appendChild(cardEl);
     renderRestTimer(exIndex);
+    updateSetProgress(exIndex);
   });
 }
 
@@ -914,16 +994,47 @@ function updateCompleteBadge(exIndex) {
   card.querySelector('.complete-badge').hidden = !(exercise.sets.length > 0 && exercise.sets.every(isSetComplete));
 }
 
+// Show a ✓ and green tint on a set row once weight + reps are both filled in.
+function refreshSetRowState(exIndex, setIndex) {
+  const card = exerciseList.children[exIndex];
+  if (!card) return;
+  const rowEl = card.querySelector(`.set-row[data-set-index="${setIndex}"]`);
+  if (!rowEl) return;
+  const done = isSetComplete(current.exercises[exIndex].sets[setIndex]);
+  rowEl.classList.toggle('set-complete', done);
+  const idxEl = rowEl.querySelector('.set-index');
+  if (idxEl) idxEl.textContent = done ? '✓' : (setIndex + 1);
+}
+
+// "done / total" pill in the card header (shown for planned or partly-done exercises).
+function updateSetProgress(exIndex) {
+  const card = exerciseList.children[exIndex];
+  if (!card) return;
+  const progEl = card.querySelector('.set-progress');
+  if (!progEl) return;
+  const ex = current.exercises[exIndex];
+  const total = ex.sets.length;
+  const done = ex.sets.filter(isSetComplete).length;
+  const show = (ex.planned || total > 1) && done < total;
+  progEl.hidden = !show;
+  progEl.textContent = `${done}/${total} sets`;
+}
+
 function buildSetRow(exIndex, setIndex, set) {
   const row = setRowTpl.content.cloneNode(true);
   const rowEl = row.querySelector('.set-row');
   rowEl.dataset.setIndex = setIndex;
-  row.querySelector('.set-index').textContent = setIndex + 1;
+  const done = isSetComplete(set);
+  rowEl.classList.toggle('set-complete', done);
+  row.querySelector('.set-index').textContent = done ? '✓' : (setIndex + 1);
 
   const weightInput = row.querySelector('.weight-input');
   const repsInput = row.querySelector('.reps-input');
   weightInput.value = formatWeight(set.weight);
   repsInput.value = set.reps ?? '';
+  // For a planned exercise, hint the target reps in the empty reps field.
+  const targetReps = current.exercises[exIndex].targetReps;
+  if (current.exercises[exIndex].planned && targetReps) repsInput.placeholder = String(targetReps);
 
   weightInput.addEventListener('input', () => {
     current.exercises[exIndex].sets[setIndex].weight = weightInput.value;
@@ -931,6 +1042,8 @@ function buildSetRow(exIndex, setIndex, set) {
     renderMuscleSummary();
     handleSetCompletionCheck(exIndex, setIndex);
     updateCompleteBadge(exIndex);
+    refreshSetRowState(exIndex, setIndex);
+    updateSetProgress(exIndex);
   });
   repsInput.addEventListener('input', () => {
     current.exercises[exIndex].sets[setIndex].reps = repsInput.value;
@@ -938,6 +1051,8 @@ function buildSetRow(exIndex, setIndex, set) {
     renderMuscleSummary();
     handleSetCompletionCheck(exIndex, setIndex);
     updateCompleteBadge(exIndex);
+    refreshSetRowState(exIndex, setIndex);
+    updateSetProgress(exIndex);
   });
 
   row.querySelector('.remove-set-btn').addEventListener('click', () => {
@@ -1000,7 +1115,10 @@ function renderMuscleDiagram() {
 
 // ---------- Exercise picker modal ----------
 
-function openPicker() {
+function openPicker(mode = 'session') {
+  pickerMode = mode === 'plan' ? 'plan' : 'session';
+  const heading = pickerOverlay.querySelector('.picker-header h2');
+  if (heading) heading.textContent = pickerMode === 'plan' ? 'Add to Plan' : 'Add Exercise';
   activeGroupId = 'all';
   pickerSearch.value = '';
   renderPickerGroups();
@@ -1058,14 +1176,15 @@ function renderPickerExercises() {
   pickerExercises.innerHTML = html;
   pickerExercises.querySelectorAll('.picker-exercise-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      addExerciseToSession(btn.dataset.name, btn.dataset.group);
+      if (pickerMode === 'plan') addExerciseToPlan(btn.dataset.name, btn.dataset.group);
+      else addExerciseToSession(btn.dataset.name, btn.dataset.group);
       closePicker();
     });
   });
 }
 
 pickerSearch.addEventListener('input', renderPickerExercises);
-openPickerBtn.addEventListener('click', openPicker);
+openPickerBtn.addEventListener('click', () => openPicker('session'));
 closePickerBtn.addEventListener('click', closePicker);
 pickerOverlay.addEventListener('click', (e) => {
   if (e.target === pickerOverlay) closePicker();
@@ -1082,10 +1201,295 @@ customExerciseForm.addEventListener('submit', (e) => {
     saveCustomExercises();
   }
 
-  addExerciseToSession(name, muscleGroup);
+  if (pickerMode === 'plan') addExerciseToPlan(name, muscleGroup);
+  else addExerciseToSession(name, muscleGroup);
   customExerciseInput.value = '';
   closePicker();
 });
+
+// ---------- Plan tab (schedule future workouts) ----------
+
+const PLAN_DEFAULT_SETS = 3;
+const PLAN_DEFAULT_REPS = 10;
+
+function planForDate(key) { return plans[key] || null; }
+function ensurePlan(key) {
+  if (!plans[key]) plans[key] = { title: '', exercises: [] };
+  return plans[key];
+}
+function prunePlan(key) {
+  const p = plans[key];
+  if (p && p.exercises.length === 0 && !p.title) delete plans[key];
+}
+
+// A short auto-title from the muscle groups a plan covers.
+function autoPlanTitle(exercises) {
+  const groups = [];
+  exercises.forEach(ex => { if (!groups.includes(ex.muscleGroup)) groups.push(ex.muscleGroup); });
+  return groups.slice(0, 3).map(g => groupMeta(g).label).join(' · ');
+}
+
+// The reps this exercise was last performed at, to seed a sensible plan target.
+function lastRepsFor(name) {
+  for (const session of history) {
+    const ex = session.exercises.find(e => e.name.toLowerCase() === name.toLowerCase());
+    if (ex && ex.sets.length) {
+      const r = parseInt(ex.sets[ex.sets.length - 1].reps, 10);
+      if (Number.isFinite(r) && r > 0) return r;
+    }
+  }
+  return PLAN_DEFAULT_REPS;
+}
+
+function addExerciseToPlan(name, muscleGroup) {
+  const plan = ensurePlan(planDate);
+  plan.exercises.push({ name, muscleGroup, targetSets: PLAN_DEFAULT_SETS, targetReps: lastRepsFor(name) });
+  savePlans();
+  renderPlan();
+  renderTodayPlanBanner();
+}
+
+function renderPlanDayChips() {
+  const keys = [todayKey(), tomorrowKey()];
+  if (!keys.includes(planDate)) keys.push(planDate);
+  planDayChipsEl.innerHTML = keys.map(k =>
+    `<button class="plan-day-chip ${k === planDate ? 'active' : ''}" data-key="${k}">${formatPlanDay(k)}</button>`
+  ).join('');
+  planDayChipsEl.querySelectorAll('.plan-day-chip').forEach(btn => {
+    btn.addEventListener('click', () => { planDate = btn.dataset.key; renderPlan(); });
+  });
+  planDateInput.value = planDate;
+  planDateInput.min = todayKey();
+}
+
+function renderPlan() {
+  renderPlanDayChips();
+  const plan = planForDate(planDate);
+  const exercises = plan ? plan.exercises : [];
+
+  planTitleInput.value = plan ? (plan.title || '') : '';
+  planEmptyEl.hidden = exercises.length > 0;
+  planClearBtn.hidden = exercises.length === 0;
+
+  planExerciseListEl.innerHTML = exercises.map((ex, i) => {
+    const meta = groupMeta(ex.muscleGroup);
+    return `
+      <div class="plan-exercise-row" data-index="${i}">
+        <div class="plan-exercise-main">
+          <span class="muscle-badge" style="--badge-color:${meta.color}">${meta.label}</span>
+          <span class="plan-exercise-name">${escapeHtml(ex.name)}</span>
+        </div>
+        <div class="plan-exercise-controls">
+          <div class="plan-stepper" data-field="targetSets">
+            <button class="plan-step-btn" data-delta="-1">−</button>
+            <span class="plan-step-value">${ex.targetSets}</span><span class="plan-step-unit">sets</span>
+            <button class="plan-step-btn" data-delta="1">+</button>
+          </div>
+          <div class="plan-stepper" data-field="targetReps">
+            <button class="plan-step-btn" data-delta="-1">−</button>
+            <span class="plan-step-value">${ex.targetReps}</span><span class="plan-step-unit">reps</span>
+            <button class="plan-step-btn" data-delta="1">+</button>
+          </div>
+          <button class="plan-remove-btn" title="Remove from plan">✕</button>
+        </div>
+      </div>`;
+  }).join('');
+
+  planExerciseListEl.querySelectorAll('.plan-exercise-row').forEach(row => {
+    const idx = Number(row.dataset.index);
+    row.querySelectorAll('.plan-stepper').forEach(stepper => {
+      const field = stepper.dataset.field;
+      stepper.querySelectorAll('.plan-step-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const ex = plans[planDate].exercises[idx];
+          ex[field] = Math.max(1, (Number(ex[field]) || 1) + Number(btn.dataset.delta));
+          savePlans();
+          renderPlan();
+          renderTodayPlanBanner();
+        });
+      });
+    });
+    row.querySelector('.plan-remove-btn').addEventListener('click', () => {
+      plans[planDate].exercises.splice(idx, 1);
+      prunePlan(planDate);
+      savePlans();
+      renderPlan();
+      renderTodayPlanBanner();
+    });
+  });
+
+  renderPlanUpcoming();
+}
+
+function renderPlanUpcoming() {
+  const today = todayKey();
+  const upcoming = Object.keys(plans)
+    .filter(k => k >= today && k !== planDate && plans[k].exercises.length > 0)
+    .sort();
+  if (upcoming.length === 0) { planUpcomingEl.innerHTML = ''; return; }
+  planUpcomingEl.innerHTML = `<div class="plan-upcoming-label">Other upcoming plans</div>` +
+    upcoming.map(k => {
+      const plan = plans[k];
+      const title = plan.title || autoPlanTitle(plan.exercises) || 'Workout';
+      const sets = plan.exercises.reduce((n, e) => n + (Number(e.targetSets) || 0), 0);
+      return `<button class="plan-upcoming-item" data-key="${k}">
+        <span class="plan-upcoming-day">${formatPlanDay(k)}</span>
+        <span class="plan-upcoming-title">${escapeHtml(title)}</span>
+        <span class="plan-upcoming-meta">${plan.exercises.length} ex · ${sets} sets</span>
+      </button>`;
+    }).join('');
+  planUpcomingEl.querySelectorAll('.plan-upcoming-item').forEach(btn => {
+    btn.addEventListener('click', () => { planDate = btn.dataset.key; renderPlan(); });
+  });
+}
+
+// ----- Suggest a balanced plan based on the most-neglected muscle groups -----
+function pickExercisesForGroup(groupId, count) {
+  const usage = {};
+  history.forEach(session => session.exercises.forEach(ex => {
+    if (findMuscleGroupForName(ex.name) === groupId) {
+      usage[ex.name] = (usage[ex.name] || 0) + ex.sets.length;
+    }
+  }));
+  const ordered = Object.keys(usage).sort((a, b) => usage[b] - usage[a]);
+  (EXERCISE_LIBRARY[groupId] || []).forEach(n => {
+    if (!ordered.some(o => o.toLowerCase() === n.toLowerCase())) ordered.push(n);
+  });
+  return ordered.slice(0, count);
+}
+
+function suggestPlanForDate() {
+  // Rank the real muscle groups by how long since each was last trained
+  // (never-trained groups sort first as the most neglected).
+  const { lastTrained } = computeMuscleSplit();
+  const ranked = MUSCLE_GROUPS.slice().sort((a, b) =>
+    (lastTrained[a.id] || 0) - (lastTrained[b.id] || 0));
+  const targetGroups = ranked.slice(0, 3);
+
+  const chosen = [];
+  targetGroups.forEach(group => {
+    pickExercisesForGroup(group.id, 2).forEach(name => {
+      chosen.push({ name, muscleGroup: group.id, targetSets: PLAN_DEFAULT_SETS, targetReps: lastRepsFor(name) });
+    });
+  });
+  if (chosen.length === 0) return;
+
+  const existing = plans[planDate];
+  if (existing && existing.exercises.length > 0 &&
+      !confirm(`Replace the current plan for ${formatPlanDay(planDate)} with a suggested one?`)) return;
+
+  const title = autoPlanTitle(chosen);
+  plans[planDate] = { title: title ? `${title} (suggested)` : 'Suggested workout', exercises: chosen };
+  savePlans();
+  renderPlan();
+  renderTodayPlanBanner();
+}
+
+planAddBtn.addEventListener('click', () => openPicker('plan'));
+planSuggestBtn.addEventListener('click', suggestPlanForDate);
+planClearBtn.addEventListener('click', () => {
+  if (!confirm(`Clear the plan for ${formatPlanDay(planDate)}?`)) return;
+  delete plans[planDate];
+  savePlans();
+  renderPlan();
+  renderTodayPlanBanner();
+});
+planTitleInput.addEventListener('input', () => {
+  const plan = ensurePlan(planDate);
+  plan.title = planTitleInput.value;
+  prunePlan(planDate);
+  savePlans();
+  renderTodayPlanBanner();
+});
+planDateInput.addEventListener('change', () => {
+  if (planDateInput.value) { planDate = planDateInput.value; renderPlan(); }
+});
+
+// ----- Today: banner to start a workout planned for today -----
+function renderTodayPlanBanner() {
+  const plan = planForDate(todayKey());
+  const showable = plan && plan.exercises.length > 0 && current.exercises.length === 0;
+  if (!showable) { todayPlanBanner.hidden = true; todayPlanBanner.innerHTML = ''; return; }
+  const title = plan.title || autoPlanTitle(plan.exercises) || 'Your plan';
+  const sets = plan.exercises.reduce((n, e) => n + (Number(e.targetSets) || 0), 0);
+  todayPlanBanner.hidden = false;
+  todayPlanBanner.innerHTML = `
+    <div class="plan-banner-main">
+      <div class="plan-banner-label">🗓️ Planned for today</div>
+      <div class="plan-banner-title">${escapeHtml(title)}</div>
+      <div class="plan-banner-meta">${plan.exercises.length} exercise${plan.exercises.length === 1 ? '' : 's'} · ${sets} sets</div>
+    </div>
+    <button class="plan-banner-start" id="plan-banner-start">Start</button>`;
+  document.getElementById('plan-banner-start').addEventListener('click', startTodaysPlan);
+}
+
+function startTodaysPlan() {
+  const plan = planForDate(todayKey());
+  if (!plan || plan.exercises.length === 0) return;
+  if (!current.startedAt) current.startedAt = new Date().toISOString();
+
+  plan.exercises.forEach(pex => {
+    const bar = barPrefs[pex.name.toLowerCase()] || 'none';
+    const barW = bar !== 'none' && BAR_TYPES[bar] ? BAR_TYPES[bar].weight() : 0;
+    const startWeight = barW > 0 ? formatWeight(barW) : '';
+    const n = Math.max(1, Number(pex.targetSets) || 1);
+    const sets = [];
+    for (let i = 0; i < n; i++) sets.push({ weight: startWeight, reps: '' });
+    current.exercises.push({
+      name: pex.name,
+      muscleGroup: pex.muscleGroup,
+      bar,
+      planned: true,
+      targetReps: pex.targetReps,
+      sets,
+    });
+  });
+  saveCurrent();
+
+  // The plan is now the live session — remove it so the banner clears.
+  delete plans[todayKey()];
+  savePlans();
+
+  // First exercise expanded, the rest collapsed (one active card at a time).
+  activeSetIndexByExercise = {};
+  minimizedByExercise = {};
+  current.exercises.forEach((_, i) => { minimizedByExercise[i] = i !== 0; });
+
+  renderExercises();
+  renderMuscleSummary();
+  renderWorkoutDuration();
+  renderTodayPlanBanner();
+  renderPlan();
+}
+
+// ---------- Calories burned (estimate) ----------
+// Mifflin–St Jeor resting metabolic rate personalised by sex/weight/height/age,
+// then RMR-per-minute × MET × minutes. MET ≈ 5.0 for general resistance
+// training (moderate-to-vigorous effort). An estimate, not a measurement.
+const STRENGTH_MET = 5.0;
+
+function profileComplete() {
+  return !!settings.sex
+    && Number(settings.bodyWeight) > 0
+    && Number(settings.height) > 0
+    && Number(settings.age) > 0;
+}
+function bodyWeightKg() {
+  const w = Number(settings.bodyWeight) || 0;
+  return settings.unit === 'kg' ? w : w * LBS_TO_KG;
+}
+function basalMetabolicRate() {
+  const kg = bodyWeightKg();
+  const cm = Number(settings.height) || 0;
+  const age = Number(settings.age) || 0;
+  const base = 10 * kg + 6.25 * cm - 5 * age;
+  return settings.sex === 'female' ? base - 161 : base + 5;
+}
+function caloriesForSeconds(seconds) {
+  if (!profileComplete() || !Number.isFinite(seconds) || seconds <= 0) return null;
+  const rmrPerMin = basalMetabolicRate() / 1440;
+  return Math.round(STRENGTH_MET * rmrPerMin * (seconds / 60));
+}
 
 // ---------- Settings modal ----------
 
@@ -1111,6 +1515,12 @@ function renderSettings() {
   unitLabels.forEach(el => { el.textContent = settings.unit; });
   barbellWeightInput.value = formatWeight(settings.barbellWeight);
   curlBarWeightInput.value = formatWeight(settings.curlBarWeight);
+
+  sexButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.sex === settings.sex));
+  bodyWeightInput.value = settings.bodyWeight === '' || settings.bodyWeight == null ? '' : formatWeight(settings.bodyWeight);
+  heightInput.value = settings.height ?? '';
+  ageInput.value = settings.age ?? '';
+
   appVersionEl.textContent = `v${APP_VERSION}`;
   creditVersionEl.textContent = APP_VERSION;
   renderChangelog();
@@ -1184,6 +1594,8 @@ function convertAllWeights(newUnit) {
   const convertNum = (n) => Math.round((Number(n) || 0) * factor * 10) / 10;
   settings.barbellWeight = convertNum(settings.barbellWeight);
   settings.curlBarWeight = convertNum(settings.curlBarWeight);
+  // Convert the stored body weight (leave it blank if never set).
+  if (Number(settings.bodyWeight) > 0) settings.bodyWeight = convertNum(settings.bodyWeight);
 
   settings.unit = newUnit;
   saveSettings();
@@ -1268,6 +1680,35 @@ curlBarWeightInput.addEventListener('input', () => {
   renderExercises();
 });
 
+// Body profile (drives the calorie estimate in Stats)
+sexButtons.forEach(btn => {
+  btn.addEventListener('click', () => {
+    settings.sex = btn.dataset.sex;
+    saveSettings();
+    renderSettings();
+    renderStats();
+    renderHistory();
+  });
+});
+bodyWeightInput.addEventListener('input', () => {
+  settings.bodyWeight = bodyWeightInput.value === '' ? '' : (parseFloat(bodyWeightInput.value) || 0);
+  saveSettings();
+  renderStats();
+  renderHistory();
+});
+heightInput.addEventListener('input', () => {
+  settings.height = heightInput.value === '' ? '' : (parseFloat(heightInput.value) || 0);
+  saveSettings();
+  renderStats();
+  renderHistory();
+});
+ageInput.addEventListener('input', () => {
+  settings.age = ageInput.value === '' ? '' : (parseInt(ageInput.value, 10) || 0);
+  saveSettings();
+  renderStats();
+  renderHistory();
+});
+
 exportBackupBtn.addEventListener('click', exportBackup);
 importBackupBtn.addEventListener('click', () => importBackupInput.click());
 importBackupInput.addEventListener('change', () => {
@@ -1302,7 +1743,7 @@ function exportBackup() {
     app: 'ironlog',
     version: APP_VERSION,
     exportedAt: new Date().toISOString(),
-    data: { current, history, customExercises, settings, barPrefs },
+    data: { current, history, customExercises, settings, barPrefs, plans },
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -1337,6 +1778,7 @@ function importBackup(file) {
     if (d.customExercises) { customExercises = d.customExercises; saveCustomExercises(); }
     if (d.settings) { settings = { ...settings, ...d.settings }; saveSettings(); }
     if (d.barPrefs) { barPrefs = d.barPrefs; saveBarPrefs(); }
+    if (d.plans) { plans = d.plans; savePlans(); }
 
     applyTheme();
     activeSetIndexByExercise = {};
@@ -1351,6 +1793,8 @@ function importBackup(file) {
     renderHistory();
     renderStats();
     renderSettings();
+    renderPlan();
+    renderTodayPlanBanner();
     alert('Backup restored successfully.');
   };
   reader.readAsText(file);
@@ -1398,12 +1842,16 @@ finishBtn.addEventListener('click', () => {
   notifiedRestByExercise = {};
   minimizedByExercise = {};
   saveCurrent();
+  // The day is done — drop any leftover plan for today so it stops prompting.
+  if (plans[todayKey()]) { delete plans[todayKey()]; savePlans(); }
   renderExercises();
   renderSessionDate();
   renderMuscleSummary();
   renderWorkoutDuration();
   renderHistory();
   renderStats();
+  renderTodayPlanBanner();
+  renderPlan();
   updateWakeLock();
 });
 
@@ -1486,7 +1934,11 @@ function renderHistory() {
     const durationLabel = Number.isFinite(session.durationSeconds)
       ? ` <span class="history-duration">⏱ ${formatDuration(session.durationSeconds)}</span>`
       : '';
-    header.innerHTML = `<h3>${formatDate(session.date)}${durationLabel}</h3>`;
+    const sessionCal = caloriesForSeconds(session.durationSeconds);
+    const calLabel = sessionCal !== null
+      ? ` <span class="history-cal">🔥 ${sessionCal} kcal</span>`
+      : '';
+    header.innerHTML = `<h3>${formatDate(session.date)}${durationLabel}${calLabel}</h3>`;
 
     const delBtn = document.createElement('button');
     delBtn.className = 'delete-history-btn';
@@ -1577,6 +2029,7 @@ function computeOverviewStats() {
   const sevenDaysAgo = now.getTime() - 7 * 86400000;
   let thisWeekVolume = 0, lastWeekVolume = 0, workoutsThisWeek = 0, workoutsLast7 = 0;
   let mostRecentWorkout = null;
+  let caloriesTotal = 0, caloriesThisWeek = 0;
 
   history.forEach(session => {
     const t = new Date(session.date).getTime();
@@ -1585,6 +2038,9 @@ function computeOverviewStats() {
     else if (t >= lastWeekStart) { lastWeekVolume += vol; }
     if (t >= sevenDaysAgo) workoutsLast7 += 1;
     if (mostRecentWorkout === null || t > mostRecentWorkout) mostRecentWorkout = t;
+
+    const cal = caloriesForSeconds(session.durationSeconds);
+    if (cal !== null) { caloriesTotal += cal; if (t >= thisWeekStart) caloriesThisWeek += cal; }
 
     if (Number.isFinite(session.durationSeconds)) { durationTotal += session.durationSeconds; durationCount += 1; }
     session.exercises.forEach(ex => {
@@ -1613,6 +2069,8 @@ function computeOverviewStats() {
     workoutsThisWeek,
     workoutsLast7,
     daysSinceLast,
+    caloriesTotal: Math.round(caloriesTotal),
+    caloriesThisWeek: Math.round(caloriesThisWeek),
   };
 }
 
@@ -1631,6 +2089,14 @@ function renderStatsOverview() {
   const durCard = s.avgWorkoutSeconds !== null
     ? `<div class="stat-card"><div class="stat-value">${formatDuration(s.avgWorkoutSeconds)}</div><div class="stat-label">Avg workout</div></div>` : '';
 
+  const hasProfile = profileComplete();
+  const calCard = hasProfile
+    ? `<div class="stat-card"><div class="stat-value">${s.caloriesTotal.toLocaleString()}</div><div class="stat-label">Calories burned</div></div>` : '';
+  const calWeek = hasProfile ? ` · 🔥 ~${s.caloriesThisWeek.toLocaleString()} kcal` : '';
+  const calPrompt = hasProfile
+    ? ''
+    : `<div class="cal-prompt">🔥 Add your sex, weight, height &amp; age in <strong>Settings</strong> to estimate calories burned.</div>`;
+
   const lastLabel = s.daysSinceLast === null ? '' : s.daysSinceLast === 0 ? ' · last workout today' : ` · last ${s.daysSinceLast}d ago`;
 
   statsOverviewEl.innerHTML = `
@@ -1638,7 +2104,7 @@ function renderStatsOverview() {
       <div class="insight-title">This week</div>
       <div class="insight-big">${s.thisWeekVolume.toLocaleString()} <span class="insight-unit">${settings.unit} volume</span></div>
       ${volTrend}
-      <div class="insight-sub">${s.workoutsThisWeek} workout${s.workoutsThisWeek === 1 ? '' : 's'} this week · ${s.workoutsLast7} in last 7 days${lastLabel}</div>
+      <div class="insight-sub">${s.workoutsThisWeek} workout${s.workoutsThisWeek === 1 ? '' : 's'} this week · ${s.workoutsLast7} in last 7 days${lastLabel}${calWeek}</div>
     </div>
     <div class="stat-grid">
       <div class="stat-card"><div class="stat-value">${s.totalWorkouts}</div><div class="stat-label">Workouts</div></div>
@@ -1647,7 +2113,9 @@ function renderStatsOverview() {
       <div class="stat-card"><div class="stat-value">${s.uniqueExercises}</div><div class="stat-label">Exercises</div></div>
       ${restCard}
       ${durCard}
-    </div>`;
+      ${calCard}
+    </div>
+    ${calPrompt}`;
 }
 
 // ----- Progress: per-exercise strength trend -----
@@ -1831,11 +2299,14 @@ function renderStats() {
 
 // ---------- Tabs ----------
 
-const TAB_ORDER = ['workout', 'history', 'stats'];
+const TAB_ORDER = ['workout', 'plan', 'history', 'stats'];
 
 function switchToTab(tabName) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tabName));
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === `${tabName}-tab`));
+  // Re-render date-sensitive views on entry (day may have rolled over).
+  if (tabName === 'plan') renderPlan();
+  if (tabName === 'workout') renderTodayPlanBanner();
 }
 
 document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -1886,6 +2357,8 @@ renderWorkoutDuration();
 renderHistory();
 renderStats();
 renderSettings();
+renderPlan();
+renderTodayPlanBanner();
 updateWakeLock();
 ensurePushSubscription();
 
